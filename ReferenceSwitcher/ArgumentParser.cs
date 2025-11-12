@@ -1,3 +1,6 @@
+using System.CommandLine;
+using System.CommandLine.Help;
+using System.CommandLine.Parsing;
 using System.IO;
 using System.Text;
 using CSharpFunctionalExtensions;
@@ -6,70 +9,94 @@ namespace ReferenceSwitcher;
 
 internal static class ArgumentParser
 {
+    private static readonly Option<string> ModeOption = new("--mode", "-m")
+    {
+        Description = "Define el modo de ejecución.",
+    };
+
+    private static readonly Option<string> SolutionOption = new("--solution", "-s")
+    {
+        Description = "Ruta al archivo .sln base.",
+    };
+
+    private static readonly Option<string> ScanDirectoryOption = new("--scan-directory", "-d")
+    {
+        Description = "Directorio donde se buscarán proyectos locales.",
+    };
+
+    private static readonly HelpOption HelpOption = new("--help", "-h")
+    {
+        Description = "Muestra esta ayuda.",
+    };
+
+    private static readonly RootCommand RootCommand = CreateRootCommand();
+    private static readonly HelpBuilder HelpBuilder = new(100);
+
     public static Result<AppArguments> Parse(string[] args)
     {
+        var parseResult = RootCommand.Parse(args);
+
         if (args.Length == 0)
             return Result.Failure<AppArguments>(BuildUsage("No se proporcionaron argumentos."));
 
-        SwitchMode? mode = null;
-        string? solution = null;
-        string? scanDirectory = null;
+        if (parseResult.GetResult(HelpOption) is not null)
+            return Result.Failure<AppArguments>(BuildUsage(null));
 
-        for (var index = 0; index < args.Length; index++)
+        if (parseResult.UnmatchedTokens.Count > 0)
         {
-            var current = args[index];
-            switch (current)
-            {
-                case "--mode":
-                case "-m":
-                    if (!TryReadNext(args, ref index, out var modeValue))
-                        return Result.Failure<AppArguments>(BuildUsage("Falta el valor para --mode."));
-
-                    var modeResult = ParseMode(modeValue);
-                    if (modeResult.IsFailure)
-                        return Result.Failure<AppArguments>(BuildUsage(modeResult.Error));
-
-                    mode = modeResult.Value;
-                    break;
-
-                case "--solution":
-                case "-s":
-                    if (!TryReadNext(args, ref index, out var solutionValue))
-                        return Result.Failure<AppArguments>(BuildUsage("Falta el valor para --solution."));
-
-                    solution = solutionValue;
-                    break;
-
-                case "--scan-directory":
-                case "-d":
-                    if (!TryReadNext(args, ref index, out var directoryValue))
-                        return Result.Failure<AppArguments>(BuildUsage("Falta el valor para --scan-directory."));
-
-                    scanDirectory = directoryValue;
-                    break;
-
-                case "--help":
-                case "-h":
-                    return Result.Failure<AppArguments>(BuildUsage(null));
-
-                default:
-                    return Result.Failure<AppArguments>(BuildUsage($"Argumento desconocido: {current}"));
-            }
+            var unknown = parseResult.UnmatchedTokens[0];
+            return Result.Failure<AppArguments>(BuildUsage($"Argumento desconocido: {unknown}"));
         }
 
-        if (mode is null)
-            return Result.Failure<AppArguments>(BuildUsage("Debe especificar el modo de ejecución."));
+        var modeResult = ReadRequiredOption(parseResult, ModeOption, "Debe especificar el modo de ejecución.", "Falta el valor para --mode.")
+            .Bind(ParseMode);
 
-        if (string.IsNullOrWhiteSpace(solution))
-            return Result.Failure<AppArguments>(BuildUsage("Debe especificar la ruta de la solución."));
+        if (modeResult.IsFailure)
+            return Result.Failure<AppArguments>(BuildUsage(modeResult.Error));
 
-        if (string.IsNullOrWhiteSpace(scanDirectory))
-            return Result.Failure<AppArguments>(BuildUsage("Debe especificar el directorio de escaneo."));
+        var solutionResult = ReadRequiredOption(parseResult, SolutionOption, "Debe especificar la ruta de la solución.", "Falta el valor para --solution.");
+        if (solutionResult.IsFailure)
+            return Result.Failure<AppArguments>(BuildUsage(solutionResult.Error));
 
-        var normalizedSolution = Path.GetFullPath(solution);
-        var normalizedScanDirectory = Path.GetFullPath(scanDirectory);
+        var scanDirectoryResult = ReadRequiredOption(parseResult, ScanDirectoryOption, "Debe especificar el directorio de escaneo.", "Falta el valor para --scan-directory.");
+        if (scanDirectoryResult.IsFailure)
+            return Result.Failure<AppArguments>(BuildUsage(scanDirectoryResult.Error));
 
-        return Result.Success(new AppArguments(mode.Value, normalizedSolution, normalizedScanDirectory));
+        var normalizedSolution = Path.GetFullPath(solutionResult.Value);
+        var normalizedScanDirectory = Path.GetFullPath(scanDirectoryResult.Value);
+
+        return Result.Success(new AppArguments(modeResult.Value, normalizedSolution, normalizedScanDirectory));
+    }
+
+    private static RootCommand CreateRootCommand()
+    {
+        var command = new RootCommand("Automatiza el cambio de referencias entre paquetes y proyectos.")
+        {
+            TreatUnmatchedTokensAsErrors = true,
+        };
+
+        command.Add(ModeOption);
+        command.Add(SolutionOption);
+        command.Add(ScanDirectoryOption);
+        command.Add(HelpOption);
+
+        return command;
+    }
+
+    private static Result<string> ReadRequiredOption(ParseResult parseResult, Option<string> option, string missingOptionMessage, string missingValueMessage)
+    {
+        var optionResult = parseResult.GetResult(option);
+        if (optionResult is null)
+            return Result.Failure<string>(missingOptionMessage);
+
+        if (optionResult.Tokens.Count == 0)
+            return Result.Failure<string>(missingValueMessage);
+
+        var value = parseResult.GetValue(option);
+        if (string.IsNullOrWhiteSpace(value))
+            return Result.Failure<string>(missingValueMessage);
+
+        return Result.Success(value);
     }
 
     private static Result<SwitchMode> ParseMode(string value)
@@ -89,19 +116,6 @@ internal static class ArgumentParser
         }
     }
 
-    private static bool TryReadNext(string[] args, ref int index, out string value)
-    {
-        if (index + 1 >= args.Length)
-        {
-            value = string.Empty;
-            return false;
-        }
-
-        index++;
-        value = args[index];
-        return true;
-    }
-
     private static string BuildUsage(string? error)
     {
         var builder = new StringBuilder();
@@ -111,14 +125,11 @@ internal static class ArgumentParser
             builder.AppendLine();
         }
 
-        builder.AppendLine("Uso:");
-        builder.AppendLine("  reference-switcher --mode <package-to-project|project-to-package> --solution <ruta> --scan-directory <ruta>");
-        builder.AppendLine();
-        builder.AppendLine("Opciones:");
-        builder.AppendLine("  --mode, -m            Define el modo de ejecución.");
-        builder.AppendLine("  --solution, -s        Ruta al archivo .sln base.");
-        builder.AppendLine("  --scan-directory, -d  Directorio donde se buscarán proyectos locales.");
-        builder.AppendLine("  --help, -h            Muestra esta ayuda.");
+        using var writer = new StringWriter();
+        var context = new HelpContext(HelpBuilder, RootCommand, writer);
+        HelpBuilder.Write(context);
+        builder.Append(writer.ToString());
+
         return builder.ToString();
     }
 }
