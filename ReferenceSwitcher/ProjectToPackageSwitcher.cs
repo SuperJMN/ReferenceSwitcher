@@ -20,9 +20,10 @@ internal sealed class ProjectToPackageSwitcher
 
     public Result Switch(IReadOnlyCollection<string> rootProjects)
     {
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var project in rootProjects)
         {
-            var result = ReplaceProjects(project);
+            var result = ReplaceProjects(project, visited);
             if (result.IsFailure)
                 return result;
         }
@@ -30,9 +31,12 @@ internal sealed class ProjectToPackageSwitcher
         return Result.Success();
     }
 
-    private Result ReplaceProjects(string projectPath)
+    private Result ReplaceProjects(string projectPath, ISet<string> visited)
     {
         var normalizedPath = Path.GetFullPath(projectPath);
+        if (!visited.Add(normalizedPath))
+            return Result.Success();
+
         if (!File.Exists(normalizedPath))
             return Result.Failure($"No se encontró el proyecto '{normalizedPath}'.");
 
@@ -74,13 +78,18 @@ internal sealed class ProjectToPackageSwitcher
             if (alreadyExists)
             {
                 writer.WriteLine($"[{metadata.PackageId}] Ya existe PackageReference en '{normalizedPath}'. Eliminado ProjectReference.");
-                continue;
+            }
+            else
+            {
+                var targetGroup = parentGroup ?? FindOrCreatePackageGroup(document, ns);
+                var packageReference = new XElement(ns + "PackageReference", new XAttribute("Include", metadata.PackageId));
+                targetGroup.Add(packageReference);
+                writer.WriteLine($"[{metadata.PackageId}] Reemplazado ProjectReference por PackageReference en '{normalizedPath}'.");
             }
 
-            var targetGroup = parentGroup ?? FindOrCreatePackageGroup(document, ns);
-            var packageReference = new XElement(ns + "PackageReference", new XAttribute("Include", metadata.PackageId));
-            targetGroup.Add(packageReference);
-            writer.WriteLine($"[{metadata.PackageId}] Reemplazado ProjectReference por PackageReference en '{normalizedPath}'.");
+            var recursionResult = ReplaceProjects(metadata.ProjectPath, visited);
+            if (recursionResult.IsFailure)
+                return recursionResult;
         }
 
         foreach (var group in groupsToReview)
