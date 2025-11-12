@@ -3,25 +3,31 @@ using System.CommandLine.Help;
 using System.CommandLine.Parsing;
 using System.IO;
 using System.Text;
+using System.Linq;
 using CSharpFunctionalExtensions;
 
 namespace ReferenceSwitcher;
 
 internal static class ArgumentParser
 {
+    private const string ExecutableDisplayName = "ReferenceSwitcher";
+
     private static readonly Option<string> ModeOption = new("--mode", "-m")
     {
         Description = "Define el modo de ejecución.",
+        HelpName = "modo",
     };
 
     private static readonly Option<string> SolutionOption = new("--solution", "-s")
     {
         Description = "Ruta al archivo .sln base.",
+        HelpName = "ruta",
     };
 
     private static readonly Option<string> ScanDirectoryOption = new("--scan-directory", "-d")
     {
         Description = "Directorio donde se buscarán proyectos locales.",
+        HelpName = "directorio",
     };
 
     private static readonly HelpOption HelpOption = new("--help", "-h")
@@ -30,7 +36,6 @@ internal static class ArgumentParser
     };
 
     private static readonly RootCommand RootCommand = CreateRootCommand();
-    private static readonly HelpBuilder HelpBuilder = new(100);
 
     public static Result<AppArguments> Parse(string[] args)
     {
@@ -125,11 +130,61 @@ internal static class ArgumentParser
             builder.AppendLine();
         }
 
-        using var writer = new StringWriter();
-        var context = new HelpContext(HelpBuilder, RootCommand, writer);
-        HelpBuilder.Write(context);
-        builder.Append(writer.ToString());
+        builder.AppendLine("Uso:");
+        builder.Append("  ");
+        builder.Append(ExecutableDisplayName);
+
+        foreach (var option in RootCommand.Options)
+        {
+            builder.Append(' ');
+            builder.Append(FormatUsage(option));
+        }
+
+        builder.AppendLine();
+        builder.AppendLine();
+        builder.AppendLine(RootCommand.Description);
+        builder.AppendLine();
+        builder.AppendLine("Opciones:");
+
+        foreach (var option in RootCommand.Options)
+        {
+            var aliases = string.Join(", ", option.Aliases.Select(FormatAlias));
+            builder.Append("  ");
+            builder.AppendLine(aliases);
+
+            if (!string.IsNullOrWhiteSpace(option.Description))
+            {
+                builder.Append("      ");
+                builder.AppendLine(option.Description);
+            }
+
+            builder.AppendLine();
+        }
+
+        if (builder.Length > 0 && builder[^1] == '\n')
+            builder.Length--;
 
         return builder.ToString();
+    }
+
+    private static string FormatUsage(Option option)
+    {
+        var alias = option.Aliases.FirstOrDefault() ?? option.Name;
+        var usageAlias = FormatAlias(alias);
+        var valueName = string.IsNullOrWhiteSpace(option.HelpName) ? "valor" : option.HelpName;
+
+        return option.Arity.MaximumNumberOfValues switch
+        {
+            0 => usageAlias,
+            _ => $"{usageAlias} <{valueName}>",
+        };
+    }
+
+    private static string FormatAlias(string alias)
+    {
+        if (alias.StartsWith("-"))
+            return alias;
+
+        return alias.Length == 1 ? $"-{alias}" : $"--{alias}";
     }
 }
