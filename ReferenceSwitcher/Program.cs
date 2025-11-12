@@ -1,3 +1,20 @@
-﻿// See https://aka.ms/new-console-template for more information
+using CSharpFunctionalExtensions;
 
-Console.WriteLine("Hello, World!");
+namespace ReferenceSwitcher;
+
+internal static class Program
+{
+    private static int Main(string[] args)
+    {
+        var result = ArgumentParser.Parse(args)
+            .Bind(arguments => new ApplicationRunner(arguments, Console.Out).Run());
+
+        if (result.IsFailure)
+        {
+            Console.Error.WriteLine(result.Error);
+            return 1;
+        }
+
+        return 0;
+    }
+}
