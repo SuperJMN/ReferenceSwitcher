@@ -33,20 +33,20 @@ internal sealed class ProjectIndex
             if (metadataResult.IsFailure)
                 return metadataResult.ConvertFailure<ProjectIndex>();
 
+            if (!metadataResult.Value.HasPackageId)
+                continue;
+
             metadataList.Add(metadataResult.Value);
         }
 
-        var duplicates = metadataList
-            .GroupBy(m => m.PackageId, StringComparer.OrdinalIgnoreCase)
-            .Where(group => group.Count() > 1)
-            .Select(group => group.Key)
-            .ToArray();
+        if (metadataList.Count == 0)
+            return Result.Failure<ProjectIndex>($"No se encontraron proyectos con PackageId en '{scanDirectory}'.");
 
-        if (duplicates.Length > 0)
-            return Result.Failure<ProjectIndex>($"Se encontraron múltiples proyectos con el mismo PackageId: {string.Join(", ", duplicates)}.");
+        var packageIdIndex = BuildPackageIndex(metadataList);
+        if (packageIdIndex.Count == 0)
+            return Result.Failure<ProjectIndex>($"No se encontraron proyectos únicos con PackageId en '{scanDirectory}'.");
 
-        var packageIdIndex = metadataList.ToDictionary(m => m.PackageId, m => m, StringComparer.OrdinalIgnoreCase);
-        var pathIndex = metadataList.ToDictionary(m => m.ProjectPath, m => m, StringComparer.OrdinalIgnoreCase);
+        var pathIndex = packageIdIndex.Values.ToDictionary(m => m.ProjectPath, m => m, StringComparer.OrdinalIgnoreCase);
 
         return Result.Success(new ProjectIndex(packageIdIndex, pathIndex));
     }
@@ -64,5 +64,45 @@ internal sealed class ProjectIndex
         return pathIndex.TryGetValue(normalizedPath, out var metadata)
             ? Maybe.From(metadata)
             : Maybe<ProjectMetadata>.None;
+    }
+
+    private static IReadOnlyDictionary<string, ProjectMetadata> BuildPackageIndex(IEnumerable<ProjectMetadata> metadataList)
+    {
+        var duplicates = new List<string>();
+        var index = new Dictionary<string, ProjectMetadata>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var group in metadataList.GroupBy(m => m.PackageId, StringComparer.OrdinalIgnoreCase))
+        {
+            var candidates = group.ToList();
+            if (candidates.Count == 0)
+                continue;
+
+            if (candidates.Count > 1)
+                duplicates.Add(group.Key);
+
+            var selected = candidates
+                .OrderBy(metadata => ContainsReferenceSegment(metadata.ProjectPath) ? 0 : 1)
+                .ThenBy(metadata => metadata.ProjectPath.Length)
+                .ThenBy(metadata => metadata.ProjectPath, StringComparer.OrdinalIgnoreCase)
+                .First();
+
+            index[group.Key] = selected;
+        }
+
+        if (duplicates.Count > 0)
+        {
+            Console.Error.WriteLine(
+                $"Se encontraron múltiples proyectos con el mismo PackageId. Se usará la primera coincidencia para: {string.Join(", ", duplicates)}.");
+        }
+
+        return index;
+    }
+
+    private static bool ContainsReferenceSegment(string path)
+    {
+        var segments = path
+            .Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+
+        return segments.Any(segment => segment.Equals("reference", StringComparison.OrdinalIgnoreCase));
     }
 }

@@ -26,7 +26,8 @@ internal static class SolutionReader
                 continue;
 
             var relativePath = match.Groups["path"].Value;
-            var absolutePath = Path.GetFullPath(Path.Combine(solutionDirectory, relativePath));
+            var normalizedRelativePath = relativePath.Replace('\\', Path.DirectorySeparatorChar);
+            var absolutePath = Path.GetFullPath(Path.Combine(solutionDirectory, normalizedRelativePath));
 
             if (!File.Exists(absolutePath))
                 return Result.Failure<IReadOnlyCollection<string>>($"El proyecto '{relativePath}' declarado en la solución no existe.");
