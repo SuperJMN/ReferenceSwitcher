@@ -1,0 +1,71 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+      - feature/*
+
+name: $(Date:yyyyMMdd).$(Rev:.r)
+
+variables:
+  - group: api-keys
+  - name: DOTNET_CLI_TELEMETRY_OPTOUT
+    value: '1'
+  - name: DOTNET_SKIP_FIRST_TIME_EXPERIENCE
+    value: 'true'
+  - name: buildConfiguration
+    value: 'Release'
+
+stages:
+- stage: Build
+  displayName: Build
+  jobs:
+  - job: Build
+    displayName: Build
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - checkout: self
+      fetchDepth: 0
+    - task: UseDotNet@2
+      displayName: Install .NET SDK
+      inputs:
+        packageType: sdk
+        version: 9.0.x
+    - script: dotnet restore ReferenceSwitcher.sln
+      displayName: Restore
+    - script: dotnet build ReferenceSwitcher.sln --configuration $(buildConfiguration) --no-restore
+      displayName: Build
+
+- stage: Deploy
+  displayName: Deploy
+  dependsOn: Build
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  jobs:
+  - job: NuGet
+    displayName: Publish NuGet package
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - checkout: self
+      fetchDepth: 0
+    - task: UseDotNet@2
+      displayName: Install .NET SDK
+      inputs:
+        packageType: sdk
+        version: 9.0.x
+    - script: |
+        dotnet tool install --global dotnetdeployer.tool
+        echo '##vso[task.prependpath]$HOME/.dotnet/tools'
+      displayName: Install dotnetdeployer
+      env:
+        DOTNET_ROOT: $(Agent.ToolsDirectory)/dotnet
+    - script: dotnetdeployer nuget --solution ReferenceSwitcher.sln
+      displayName: Publish with dotnetdeployer
+      env:
+        NUGET_API_KEY: $(NuGetApiKey)
+        DOTNET_ROOT: $(Agent.ToolsDirectory)/dotnet
