@@ -1,12 +1,7 @@
-mode: Mainline
-branches:
-  main:
-    regex: ^main$
-    increment: Patch
-    prevent-increment-of-merged-branch-version: true
-  master:
-    regex: ^master$
-    increment: Patch
-    prevent-increment-of-merged-branch-version: true
+workflow: GitHubFlow/v1
+strategies:
+  - ConfiguredNextVersion
+  - Mainline
 ignore:
   sha: []
+merge-message-formats: {}
