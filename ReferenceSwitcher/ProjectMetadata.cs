@@ -40,7 +40,7 @@ internal sealed record ProjectMetadata(string PackageId, string ProjectPath, str
         }
         catch (Exception exception)
         {
-            return Result.Failure<ProjectMetadata>($"No se pudo analizar el proyecto '{projectPath}': {exception.Message}");
+            return Result.Failure<ProjectMetadata>($"Failed to parse project '{projectPath}': {exception.Message}");
         }
     }
 
@@ -82,7 +82,7 @@ internal sealed record ProjectMetadata(string PackageId, string ProjectPath, str
             }
             catch
             {
-                // Ignoramos archivos de importación inválidos.
+                // Ignore invalid import files.
             }
         }
 
@@ -133,7 +133,7 @@ internal sealed record ProjectMetadata(string PackageId, string ProjectPath, str
                 }
                 catch
                 {
-                    // Ignoramos archivos inválidos.
+                    // Ignore invalid files.
                 }
             }
 

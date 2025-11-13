@@ -14,25 +14,25 @@ internal static class ArgumentParser
 
     private static readonly Option<string> ModeOption = new("--mode", "-m")
     {
-        Description = "Define el modo de ejecución.",
-        HelpName = "modo",
+        Description = "Defines the execution mode.",
+        HelpName = "mode",
     };
 
     private static readonly Option<string> SolutionOption = new("--solution", "-s")
     {
-        Description = "Ruta al archivo .sln base.",
-        HelpName = "ruta",
+        Description = "Path to the base .sln file.",
+        HelpName = "path",
     };
 
     private static readonly Option<string> ScanDirectoryOption = new("--scan-directory", "-d")
     {
-        Description = "Directorio donde se buscarán proyectos locales.",
-        HelpName = "directorio",
+        Description = "Directory to scan for local projects.",
+        HelpName = "directory",
     };
 
     private static readonly HelpOption HelpOption = new("--help", "-h")
     {
-        Description = "Muestra esta ayuda.",
+        Description = "Shows this help.",
     };
 
     private static readonly RootCommand RootCommand = CreateRootCommand();
@@ -42,7 +42,7 @@ internal static class ArgumentParser
         var parseResult = RootCommand.Parse(args);
 
         if (args.Length == 0)
-            return Result.Failure<AppArguments>(BuildUsage("No se proporcionaron argumentos."));
+            return Result.Failure<AppArguments>(BuildUsage("No arguments were provided."));
 
         if (parseResult.GetResult(HelpOption) is not null)
             return Result.Failure<AppArguments>(BuildUsage(null));
@@ -50,20 +50,20 @@ internal static class ArgumentParser
         if (parseResult.UnmatchedTokens.Count > 0)
         {
             var unknown = parseResult.UnmatchedTokens[0];
-            return Result.Failure<AppArguments>(BuildUsage($"Argumento desconocido: {unknown}"));
+            return Result.Failure<AppArguments>(BuildUsage($"Unknown argument: {unknown}"));
         }
 
-        var modeResult = ReadRequiredOption(parseResult, ModeOption, "Debe especificar el modo de ejecución.", "Falta el valor para --mode.")
+        var modeResult = ReadRequiredOption(parseResult, ModeOption, "You must specify the execution mode.", "Missing value for --mode.")
             .Bind(ParseMode);
 
         if (modeResult.IsFailure)
             return Result.Failure<AppArguments>(BuildUsage(modeResult.Error));
 
-        var solutionResult = ReadRequiredOption(parseResult, SolutionOption, "Debe especificar la ruta de la solución.", "Falta el valor para --solution.");
+        var solutionResult = ReadRequiredOption(parseResult, SolutionOption, "You must specify the solution path.", "Missing value for --solution.");
         if (solutionResult.IsFailure)
             return Result.Failure<AppArguments>(BuildUsage(solutionResult.Error));
 
-        var scanDirectoryResult = ReadRequiredOption(parseResult, ScanDirectoryOption, "Debe especificar el directorio de escaneo.", "Falta el valor para --scan-directory.");
+        var scanDirectoryResult = ReadRequiredOption(parseResult, ScanDirectoryOption, "You must specify the scan directory.", "Missing value for --scan-directory.");
         if (scanDirectoryResult.IsFailure)
             return Result.Failure<AppArguments>(BuildUsage(scanDirectoryResult.Error));
 
@@ -75,7 +75,7 @@ internal static class ArgumentParser
 
     private static RootCommand CreateRootCommand()
     {
-        var command = new RootCommand("Automatiza el cambio de referencias entre paquetes y proyectos.")
+        var command = new RootCommand("Automates switching references between packages and projects.")
         {
             TreatUnmatchedTokensAsErrors = true,
         };
@@ -117,7 +117,7 @@ internal static class ArgumentParser
             case "project2package":
                 return Result.Success(SwitchMode.ProjectToPackage);
             default:
-                return Result.Failure<SwitchMode>($"Modo desconocido: {value}.");
+                return Result.Failure<SwitchMode>($"Unknown mode: {value}.");
         }
     }
 
@@ -130,7 +130,7 @@ internal static class ArgumentParser
             builder.AppendLine();
         }
 
-        builder.AppendLine("Uso:");
+        builder.AppendLine("Usage:");
         builder.Append("  ");
         builder.Append(ExecutableDisplayName);
 
@@ -144,7 +144,7 @@ internal static class ArgumentParser
         builder.AppendLine();
         builder.AppendLine(RootCommand.Description);
         builder.AppendLine();
-        builder.AppendLine("Opciones:");
+        builder.AppendLine("Options:");
 
         foreach (var option in RootCommand.Options)
         {
@@ -171,7 +171,7 @@ internal static class ArgumentParser
     {
         var alias = option.Aliases.FirstOrDefault() ?? option.Name;
         var usageAlias = FormatAlias(alias);
-        var valueName = string.IsNullOrWhiteSpace(option.HelpName) ? "valor" : option.HelpName;
+        var valueName = string.IsNullOrWhiteSpace(option.HelpName) ? "value" : option.HelpName;
 
         return option.Arity.MaximumNumberOfValues switch
         {

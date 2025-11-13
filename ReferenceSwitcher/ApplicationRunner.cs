@@ -29,7 +29,7 @@ internal sealed class ApplicationRunner
         {
             SwitchMode.PackageToProject => new PackageToProjectSwitcher(projectIndex, writer).Switch(solutionProjects),
             SwitchMode.ProjectToPackage => new ProjectToPackageSwitcher(projectIndex, writer).Switch(solutionProjects),
-            _ => Result.Failure("Modo no soportado.")
+            _ => Result.Failure("Unsupported mode.")
         };
     }
 }

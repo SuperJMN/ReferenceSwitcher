@@ -38,7 +38,7 @@ internal sealed class ProjectToPackageSwitcher
             return Result.Success();
 
         if (!File.Exists(normalizedPath))
-            return Result.Failure($"No se encontró el proyecto '{normalizedPath}'.");
+            return Result.Failure($"Project '{normalizedPath}' was not found.");
 
         if (!TryLoadDocument(normalizedPath, out var document, out var error))
             return Result.Failure(error);
@@ -77,14 +77,14 @@ internal sealed class ProjectToPackageSwitcher
 
             if (alreadyExists)
             {
-                writer.WriteLine($"[{metadata.PackageId}] Ya existe PackageReference en '{normalizedPath}'. Eliminado ProjectReference.");
+                writer.WriteLine($"[{metadata.PackageId}] PackageReference already exists in '{normalizedPath}'. Removed ProjectReference.");
             }
             else
             {
                 var targetGroup = parentGroup ?? FindOrCreatePackageGroup(document, ns);
                 var packageReference = new XElement(ns + "PackageReference", new XAttribute("Include", metadata.PackageId));
                 targetGroup.Add(packageReference);
-                writer.WriteLine($"[{metadata.PackageId}] Reemplazado ProjectReference por PackageReference en '{normalizedPath}'.");
+                writer.WriteLine($"[{metadata.PackageId}] Replaced ProjectReference with PackageReference in '{normalizedPath}'.");
             }
 
             var recursionResult = ReplaceProjects(metadata.ProjectPath, visited);
@@ -118,7 +118,7 @@ internal sealed class ProjectToPackageSwitcher
         catch (Exception exception)
         {
             document = new XDocument();
-            error = $"No se pudo leer '{projectPath}': {exception.Message}";
+            error = $"Failed to read '{projectPath}': {exception.Message}";
             return false;
         }
     }
