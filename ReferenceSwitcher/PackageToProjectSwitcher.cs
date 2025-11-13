@@ -38,7 +38,7 @@ internal sealed class PackageToProjectSwitcher
             return Result.Success();
 
         if (!File.Exists(normalizedPath))
-            return Result.Failure($"No se encontró el proyecto '{normalizedPath}'.");
+            return Result.Failure($"Project '{normalizedPath}' was not found.");
 
         if (!TryLoadDocument(normalizedPath, out var document, out var error))
             return Result.Failure(error);
@@ -80,11 +80,11 @@ internal sealed class PackageToProjectSwitcher
                 var projectReference = new XElement(ns + "ProjectReference", new XAttribute("Include", normalizedRelativePath));
                 parentGroup ??= CreateItemGroup(document, ns);
                 parentGroup.Add(projectReference);
-                writer.WriteLine($"[{metadata.PackageId}] Reemplazado PackageReference por ProjectReference en '{normalizedPath}'.");
+                writer.WriteLine($"[{metadata.PackageId}] Replaced PackageReference with ProjectReference in '{normalizedPath}'.");
             }
             else
             {
-                writer.WriteLine($"[{metadata.PackageId}] ProjectReference ya existente en '{normalizedPath}'. Se eliminará PackageReference duplicado.");
+                writer.WriteLine($"[{metadata.PackageId}] ProjectReference already exists in '{normalizedPath}'. Removing duplicate PackageReference.");
             }
 
             packageReference.Remove();
@@ -124,7 +124,7 @@ internal sealed class PackageToProjectSwitcher
         catch (Exception exception)
         {
             document = new XDocument();
-            error = $"No se pudo leer '{projectPath}': {exception.Message}";
+            error = $"Failed to read '{projectPath}': {exception.Message}";
             return false;
         }
     }

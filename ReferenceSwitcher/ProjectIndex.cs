@@ -20,11 +20,11 @@ internal sealed class ProjectIndex
     public static Result<ProjectIndex> Build(string scanDirectory)
     {
         if (!Directory.Exists(scanDirectory))
-            return Result.Failure<ProjectIndex>($"El directorio de escaneo '{scanDirectory}' no existe.");
+            return Result.Failure<ProjectIndex>($"The scan directory '{scanDirectory}' does not exist.");
 
         var projects = Directory.GetFiles(scanDirectory, "*.csproj", SearchOption.AllDirectories);
         if (projects.Length == 0)
-            return Result.Failure<ProjectIndex>($"No se encontraron proyectos en '{scanDirectory}'.");
+            return Result.Failure<ProjectIndex>($"No projects were found in '{scanDirectory}'.");
 
         var metadataList = new List<ProjectMetadata>();
         foreach (var project in projects)
@@ -40,11 +40,11 @@ internal sealed class ProjectIndex
         }
 
         if (metadataList.Count == 0)
-            return Result.Failure<ProjectIndex>($"No se encontraron proyectos con PackageId en '{scanDirectory}'.");
+            return Result.Failure<ProjectIndex>($"No projects with PackageId were found in '{scanDirectory}'.");
 
         var packageIdIndex = BuildPackageIndex(metadataList);
         if (packageIdIndex.Count == 0)
-            return Result.Failure<ProjectIndex>($"No se encontraron proyectos únicos con PackageId en '{scanDirectory}'.");
+            return Result.Failure<ProjectIndex>($"No unique projects with PackageId were found in '{scanDirectory}'.");
 
         var pathIndex = packageIdIndex.Values.ToDictionary(m => m.ProjectPath, m => m, StringComparer.OrdinalIgnoreCase);
 
@@ -92,7 +92,7 @@ internal sealed class ProjectIndex
         if (duplicates.Count > 0)
         {
             Console.Error.WriteLine(
-                $"Se encontraron múltiples proyectos con el mismo PackageId. Se usará la primera coincidencia para: {string.Join(", ", duplicates)}.");
+                $"Multiple projects with the same PackageId were found. The first match will be used for: {string.Join(", ", duplicates)}.");
         }
 
         return index;

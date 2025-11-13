@@ -14,7 +14,7 @@ internal static class SolutionReader
     public static Result<IReadOnlyCollection<string>> Read(string solutionPath)
     {
         if (!File.Exists(solutionPath))
-            return Result.Failure<IReadOnlyCollection<string>>($"No se encontró la solución '{solutionPath}'.");
+            return Result.Failure<IReadOnlyCollection<string>>($"Solution '{solutionPath}' was not found.");
 
         var solutionDirectory = Path.GetDirectoryName(solutionPath) ?? Directory.GetCurrentDirectory();
         var projectPaths = new List<string>();
@@ -30,13 +30,13 @@ internal static class SolutionReader
             var absolutePath = Path.GetFullPath(Path.Combine(solutionDirectory, normalizedRelativePath));
 
             if (!File.Exists(absolutePath))
-                return Result.Failure<IReadOnlyCollection<string>>($"El proyecto '{relativePath}' declarado en la solución no existe.");
+                return Result.Failure<IReadOnlyCollection<string>>($"The project '{relativePath}' declared in the solution does not exist.");
 
             projectPaths.Add(absolutePath);
         }
 
         if (projectPaths.Count == 0)
-            return Result.Failure<IReadOnlyCollection<string>>("La solución no contiene proyectos .csproj.");
+            return Result.Failure<IReadOnlyCollection<string>>("The solution does not contain .csproj projects.");
 
         return Result.Success((IReadOnlyCollection<string>)projectPaths);
     }
