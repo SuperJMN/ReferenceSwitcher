@@ -1,71 +1,48 @@
 trigger:
   branches:
-    include:
-      - main
-
+    include: [ master ]
 pr:
   branches:
-    include:
-      - main
-      - feature/*
+    include: [ master, "*" ]
 
-name: $(Date:yyyyMMdd).$(Rev:.r)
+pool:
+  vmImage: ubuntu-latest
 
 variables:
   - group: api-keys
   - name: DOTNET_CLI_TELEMETRY_OPTOUT
     value: '1'
-  - name: DOTNET_SKIP_FIRST_TIME_EXPERIENCE
-    value: 'true'
-  - name: buildConfiguration
-    value: 'Release'
 
-stages:
-- stage: Build
-  displayName: Build
-  jobs:
-  - job: Build
-    displayName: Build
-    pool:
-      vmImage: ubuntu-latest
-    steps:
-    - checkout: self
-      fetchDepth: 0
-    - task: UseDotNet@2
-      displayName: Install .NET SDK
-      inputs:
-        packageType: sdk
-        version: 9.0.x
-    - script: dotnet restore ReferenceSwitcher.sln
-      displayName: Restore
-    - script: dotnet build ReferenceSwitcher.sln --configuration $(buildConfiguration) --no-restore
-      displayName: Build
-
-- stage: Deploy
-  displayName: Deploy
-  dependsOn: Build
-  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
-  jobs:
-  - job: NuGet
-    displayName: Publish NuGet package
-    pool:
-      vmImage: ubuntu-latest
-    steps:
-    - checkout: self
-      fetchDepth: 0
-    - task: UseDotNet@2
-      displayName: Install .NET SDK
-      inputs:
-        packageType: sdk
-        version: 9.0.x
-    - script: |
-        dotnet tool install --global dotnetdeployer.tool
-        echo '##vso[task.prependpath]$HOME/.dotnet/tools'
-      displayName: Install dotnetdeployer
-      env:
-        DOTNET_ROOT: $(Agent.ToolsDirectory)/dotnet
-    - script: dotnetdeployer nuget --solution ReferenceSwitcher.sln
-      displayName: Publish with dotnetdeployer
-      env:
-        NUGET_API_KEY: $(NuGetApiKey)
-        DOTNET_ROOT: $(Agent.ToolsDirectory)/dotnet
+steps:
+  # Checkout completo + submódulos
+  - checkout: self
+    submodules: true
+    fetchDepth: 0
+  
+  # Install .NET 9 SDK
+  - task: UseDotNet@2
+    inputs:
+      packageType: 'sdk'
+      version: '9.0.x'  # or '9.0.100' for exact version
+      displayName: 'Install .NET 9 SDK'
+  
+  # DotnetDeployer.Tool
+  - pwsh: |
+      dotnet tool install --global DotnetDeployer.Tool
+      dotnetdeployer --version
+    displayName: Install DotnetDeployer.Tool
+  
+  # Empaquetado + publicación NuGet
+  - pwsh: |
+      $branch   = '$(Build.SourceBranch)'
+      $isMaster = $branch -eq 'refs/heads/master'
+      Write-Host "Branch: $branch. Is master: $isMaster"
+      
+      if ($isMaster) {
+        Write-Host 'Publishing NuGet packages'
+        dotnetdeployer nuget --api-key '$(NuGetApiKey)'
+      } else {
+        Write-Host 'NuGet dry run (no push)'
+        dotnetdeployer nuget --api-key '$(NuGetApiKey)' --no-push
+      }
+    displayName: Package, Publish and Release
