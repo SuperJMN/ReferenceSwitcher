@@ -18,6 +18,16 @@ internal static class ArgumentParser
         HelpName = "mode",
     };
 
+    private static readonly Option<bool> UseProjectReferencesOption = new("--use-projects")
+    {
+        Description = "Switch PackageReference items to local ProjectReference entries.",
+    };
+
+    private static readonly Option<bool> UsePackageReferencesOption = new("--use-packages")
+    {
+        Description = "Switch local ProjectReference items back to PackageReference entries.",
+    };
+
     private static readonly Option<string> SolutionOption = new("--solution", "-s")
     {
         Description = "Path to the base .sln file.",
@@ -53,8 +63,7 @@ internal static class ArgumentParser
             return Result.Failure<AppArguments>(BuildUsage($"Unknown argument: {unknown}"));
         }
 
-        var modeResult = ReadRequiredOption(parseResult, ModeOption, "You must specify the execution mode.", "Missing value for --mode.")
-            .Bind(ParseMode);
+        var modeResult = ResolveMode(parseResult);
 
         if (modeResult.IsFailure)
             return Result.Failure<AppArguments>(BuildUsage(modeResult.Error));
@@ -81,11 +90,50 @@ internal static class ArgumentParser
         };
 
         command.Add(ModeOption);
+        command.Add(UseProjectReferencesOption);
+        command.Add(UsePackageReferencesOption);
         command.Add(SolutionOption);
         command.Add(ScanDirectoryOption);
         command.Add(HelpOption);
 
         return command;
+    }
+
+    private static Result<SwitchMode> ResolveMode(ParseResult parseResult)
+    {
+        var useProjects = parseResult.GetValue(UseProjectReferencesOption);
+        var usePackages = parseResult.GetValue(UsePackageReferencesOption);
+
+        if (useProjects && usePackages)
+            return Result.Failure<SwitchMode>("Choose either --use-projects or --use-packages, not both.");
+
+        var modeOptionResult = parseResult.GetResult(ModeOption);
+        if (modeOptionResult is not null)
+        {
+            var rawModeResult = ReadRequiredOption(parseResult, ModeOption, "You must specify the execution mode.", "Missing value for --mode.");
+            if (rawModeResult.IsFailure)
+                return Result.Failure<SwitchMode>(rawModeResult.Error);
+
+            var parsedModeResult = ParseMode(rawModeResult.Value);
+            if (parsedModeResult.IsFailure)
+                return parsedModeResult;
+
+            if (useProjects && parsedModeResult.Value != SwitchMode.PackageToProject)
+                return Result.Failure<SwitchMode>("Conflicting mode arguments were provided. Remove --use-projects or adjust --mode.");
+
+            if (usePackages && parsedModeResult.Value != SwitchMode.ProjectToPackage)
+                return Result.Failure<SwitchMode>("Conflicting mode arguments were provided. Remove --use-packages or adjust --mode.");
+
+            return parsedModeResult;
+        }
+
+        if (useProjects)
+            return Result.Success(SwitchMode.PackageToProject);
+
+        if (usePackages)
+            return Result.Success(SwitchMode.ProjectToPackage);
+
+        return Result.Failure<SwitchMode>("You must specify the execution mode.");
     }
 
     private static Result<string> ReadRequiredOption(ParseResult parseResult, Option<string> option, string missingOptionMessage, string missingValueMessage)
