@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using CSharpFunctionalExtensions;
 
-namespace ReferenceSwitcher;
+namespace ReferenceSwitcher.Tool;
 
 internal sealed class ProjectIndex
 {

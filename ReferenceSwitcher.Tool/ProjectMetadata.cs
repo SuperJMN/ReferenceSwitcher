@@ -5,7 +5,7 @@ using System.Linq;
 using System.Xml.Linq;
 using CSharpFunctionalExtensions;
 
-namespace ReferenceSwitcher;
+namespace ReferenceSwitcher.Tool;
 
 internal sealed record ProjectMetadata(string PackageId, string ProjectPath, string ProjectName)
 {

@@ -6,7 +6,7 @@ using System.Text;
 using System.Linq;
 using CSharpFunctionalExtensions;
 
-namespace ReferenceSwitcher;
+namespace ReferenceSwitcher.Tool;
 
 internal static class ArgumentParser
 {

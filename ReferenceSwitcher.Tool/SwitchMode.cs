@@ -1,4 +1,4 @@
-namespace ReferenceSwitcher;
+namespace ReferenceSwitcher.Tool;
 
 internal enum SwitchMode
 {

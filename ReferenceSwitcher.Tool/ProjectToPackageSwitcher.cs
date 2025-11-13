@@ -5,14 +5,14 @@ using System.Linq;
 using System.Xml.Linq;
 using CSharpFunctionalExtensions;
 
-namespace ReferenceSwitcher;
+namespace ReferenceSwitcher.Tool;
 
-internal sealed class PackageToProjectSwitcher
+internal sealed class ProjectToPackageSwitcher
 {
     private readonly ProjectIndex projectIndex;
     private readonly TextWriter writer;
 
-    public PackageToProjectSwitcher(ProjectIndex projectIndex, TextWriter writer)
+    public ProjectToPackageSwitcher(ProjectIndex projectIndex, TextWriter writer)
     {
         this.projectIndex = projectIndex;
         this.writer = writer;
@@ -23,7 +23,7 @@ internal sealed class PackageToProjectSwitcher
         var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var project in rootProjects)
         {
-            var result = ReplacePackages(project, visited);
+            var result = ReplaceProjects(project, visited);
             if (result.IsFailure)
                 return result;
         }
@@ -31,7 +31,7 @@ internal sealed class PackageToProjectSwitcher
         return Result.Success();
     }
 
-    private Result ReplacePackages(string projectPath, ISet<string> visited)
+    private Result ReplaceProjects(string projectPath, ISet<string> visited)
     {
         var normalizedPath = Path.GetFullPath(projectPath);
         if (!visited.Add(normalizedPath))
@@ -45,55 +45,49 @@ internal sealed class PackageToProjectSwitcher
 
         var projectDirectory = Path.GetDirectoryName(normalizedPath) ?? Directory.GetCurrentDirectory();
         var ns = document.Root?.Name.Namespace ?? XNamespace.None;
-        var packageReferences = document
-            .Descendants(ns + "PackageReference")
+        var projectReferences = document
+            .Descendants(ns + "ProjectReference")
             .ToList();
 
         var groupsToReview = new HashSet<XElement>();
         var changed = false;
 
-        foreach (var packageReference in packageReferences)
+        foreach (var projectReference in projectReferences)
         {
-            var include = packageReference.Attribute("Include")?.Value;
+            var include = projectReference.Attribute("Include")?.Value;
             if (string.IsNullOrWhiteSpace(include))
                 continue;
 
-            var metadataOption = projectIndex.FindByPackageId(include);
+            var absoluteReference = Path.GetFullPath(Path.Combine(projectDirectory, include));
+            var metadataOption = projectIndex.FindByPath(absoluteReference);
             if (metadataOption.HasNoValue)
                 continue;
 
             var metadata = metadataOption.Value;
-            if (string.Equals(metadata.ProjectPath, normalizedPath, StringComparison.OrdinalIgnoreCase))
-                continue;
+            var parentGroup = projectReference.Parent as XElement;
 
-            var relativePath = Path.GetRelativePath(projectDirectory, metadata.ProjectPath);
-            var normalizedRelativePath = NormalizeRelativePath(relativePath);
+            var alreadyExists = document
+                .Descendants(ns + "PackageReference")
+                .Any(x => string.Equals(x.Attribute("Include")?.Value, metadata.PackageId, StringComparison.OrdinalIgnoreCase));
 
-            var existingProjectReference = document
-                .Descendants(ns + "ProjectReference")
-                .FirstOrDefault(x => string.Equals(NormalizeRelativePath(x.Attribute("Include")?.Value ?? string.Empty), normalizedRelativePath, StringComparison.OrdinalIgnoreCase));
-
-            var parentGroup = packageReference.Parent as XElement;
-
-            if (existingProjectReference is null)
-            {
-                var projectReference = new XElement(ns + "ProjectReference", new XAttribute("Include", normalizedRelativePath));
-                parentGroup ??= CreateItemGroup(document, ns);
-                parentGroup.Add(projectReference);
-                writer.WriteLine($"[{metadata.PackageId}] Replaced PackageReference with ProjectReference in '{normalizedPath}'.");
-            }
-            else
-            {
-                writer.WriteLine($"[{metadata.PackageId}] ProjectReference already exists in '{normalizedPath}'. Removing duplicate PackageReference.");
-            }
-
-            packageReference.Remove();
+            projectReference.Remove();
             changed = true;
-
             if (parentGroup is not null)
                 groupsToReview.Add(parentGroup);
 
-            var recursionResult = ReplacePackages(metadata.ProjectPath, visited);
+            if (alreadyExists)
+            {
+                writer.WriteLine($"[{metadata.PackageId}] PackageReference already exists in '{normalizedPath}'. Removed ProjectReference.");
+            }
+            else
+            {
+                var targetGroup = parentGroup ?? FindOrCreatePackageGroup(document, ns);
+                var packageReference = new XElement(ns + "PackageReference", new XAttribute("Include", metadata.PackageId));
+                targetGroup.Add(packageReference);
+                writer.WriteLine($"[{metadata.PackageId}] Replaced ProjectReference with PackageReference in '{normalizedPath}'.");
+            }
+
+            var recursionResult = ReplaceProjects(metadata.ProjectPath, visited);
             if (recursionResult.IsFailure)
                 return recursionResult;
         }
@@ -129,15 +123,17 @@ internal sealed class PackageToProjectSwitcher
         }
     }
 
-    private static XElement CreateItemGroup(XDocument document, XNamespace ns)
+    private static XElement FindOrCreatePackageGroup(XDocument document, XNamespace ns)
     {
-        var itemGroup = new XElement(ns + "ItemGroup");
-        document.Root?.Add(itemGroup);
-        return itemGroup;
-    }
+        var existing = document
+            .Descendants(ns + "ItemGroup")
+            .FirstOrDefault(group => group.Elements(ns + "PackageReference").Any());
 
-    private static string NormalizeRelativePath(string path)
-    {
-        return path.Replace('\\', '/');
+        if (existing is not null)
+            return existing;
+
+        var newGroup = new XElement(ns + "ItemGroup");
+        document.Root?.Add(newGroup);
+        return newGroup;
     }
 }

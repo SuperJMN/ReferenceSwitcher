@@ -1,6 +1,6 @@
 using CSharpFunctionalExtensions;
 
-namespace ReferenceSwitcher;
+namespace ReferenceSwitcher.Tool;
 
 internal static class Program
 {

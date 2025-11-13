@@ -3,7 +3,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using CSharpFunctionalExtensions;
 
-namespace ReferenceSwitcher;
+namespace ReferenceSwitcher.Tool;
 
 internal static class SolutionReader
 {

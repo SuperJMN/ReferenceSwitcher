@@ -7,7 +7,6 @@
     <Nullable>enable</Nullable>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>reference-switcher</ToolCommandName>
-    <RootNamespace>ReferenceSwitcher</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>

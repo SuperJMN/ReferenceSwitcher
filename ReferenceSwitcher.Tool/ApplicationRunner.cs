@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using CSharpFunctionalExtensions;
 
-namespace ReferenceSwitcher;
+namespace ReferenceSwitcher.Tool;
 
 internal sealed class ApplicationRunner
 {
