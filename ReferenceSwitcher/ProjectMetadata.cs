@@ -18,13 +18,22 @@ internal sealed record ProjectMetadata(string PackageId, string ProjectPath, str
             var document = XDocument.Load(projectPath);
             var ns = document.Root?.Name.Namespace ?? XNamespace.None;
 
+            var projectName = Path.GetFileNameWithoutExtension(projectPath);
+
             var assemblyName = ReadElementValue(document, ns, "AssemblyName")
-                .Match(value => value, () => Path.GetFileNameWithoutExtension(projectPath));
+                .Match(value => value.Trim(), () => projectName);
+
+            if (string.IsNullOrWhiteSpace(assemblyName))
+                assemblyName = projectName;
 
             var packageId = ReadPackageId(document, projectPath)
-                .Match(value => NormalizePackageId(value, projectPath, assemblyName), () => string.Empty);
+                .Match(
+                    value => NormalizePackageId(value, projectPath, assemblyName),
+                    () => assemblyName);
 
-            var projectName = Path.GetFileNameWithoutExtension(projectPath);
+            if (string.IsNullOrWhiteSpace(packageId))
+                packageId = projectName;
+
             var normalizedPath = Path.GetFullPath(projectPath);
 
             return Result.Success(new ProjectMetadata(packageId, normalizedPath, projectName));
