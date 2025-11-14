@@ -1,33 +1,14 @@
 using System.CommandLine;
-using System.CommandLine.Help;
 using System.CommandLine.Parsing;
 using System.IO;
-using System.Text;
 using System.Linq;
+using System.Text;
 using CSharpFunctionalExtensions;
 
 namespace ReferenceSwitcher.Tool;
 
 internal static class ArgumentParser
 {
-    private const string ExecutableDisplayName = "ReferenceSwitcher";
-
-    private static readonly Option<string> ModeOption = new("--mode", "-m")
-    {
-        Description = "Defines the execution mode.",
-        HelpName = "mode",
-    };
-
-    private static readonly Option<bool> UseProjectReferencesOption = new("--use-projects")
-    {
-        Description = "Switch PackageReference items to local ProjectReference entries.",
-    };
-
-    private static readonly Option<bool> UsePackageReferencesOption = new("--use-packages")
-    {
-        Description = "Switch local ProjectReference items back to PackageReference entries.",
-    };
-
     private static readonly Option<string> SolutionOption = new("--solution", "-s")
     {
         Description = "Path to the base .sln file.",
@@ -40,161 +21,54 @@ internal static class ArgumentParser
         HelpName = "directory",
     };
 
-    private static readonly HelpOption HelpOption = new("--help", "-h")
-    {
-        Description = "Shows this help.",
-    };
+    private static readonly Command ToProjectsCommand = new("to-projects", "Switch PackageReference items to local ProjectReference entries.");
+    private static readonly Command ToPackagesCommand = new("to-packages", "Switch local ProjectReference items back to PackageReference entries.");
 
-    private static readonly RootCommand RootCommand = CreateRootCommand();
-
-    public static Result<AppArguments> Parse(string[] args)
-    {
-        var parseResult = RootCommand.Parse(args);
-
-        if (args.Length == 0)
-            return Result.Failure<AppArguments>(BuildUsage("No arguments were provided."));
-
-        if (parseResult.GetResult(HelpOption) is not null)
-            return Result.Failure<AppArguments>(BuildUsage(null));
-
-        if (parseResult.UnmatchedTokens.Count > 0)
-        {
-            var unknown = parseResult.UnmatchedTokens[0];
-            return Result.Failure<AppArguments>(BuildUsage($"Unknown argument: {unknown}"));
-        }
-
-        var modeResult = ResolveMode(parseResult);
-
-        if (modeResult.IsFailure)
-            return Result.Failure<AppArguments>(BuildUsage(modeResult.Error));
-
-        var solutionResult = ReadRequiredOption(parseResult, SolutionOption, "You must specify the solution path.", "Missing value for --solution.");
-        if (solutionResult.IsFailure)
-            return Result.Failure<AppArguments>(BuildUsage(solutionResult.Error));
-
-        var scanDirectoryResult = ReadRequiredOption(parseResult, ScanDirectoryOption, "You must specify the scan directory.", "Missing value for --scan-directory.");
-        if (scanDirectoryResult.IsFailure)
-            return Result.Failure<AppArguments>(BuildUsage(scanDirectoryResult.Error));
-
-        var normalizedSolution = Path.GetFullPath(solutionResult.Value);
-        var normalizedScanDirectory = Path.GetFullPath(scanDirectoryResult.Value);
-
-        return Result.Success(new AppArguments(modeResult.Value, normalizedSolution, normalizedScanDirectory));
-    }
+    private static readonly RootCommand Root = CreateRootCommand();
 
     private static RootCommand CreateRootCommand()
     {
-        var command = new RootCommand("Automates switching references between packages and projects.")
+        // Mark as required in help by forcing exactly one value
+        SolutionOption.Arity = ArgumentArity.ExactlyOne;
+        ScanDirectoryOption.Arity = ArgumentArity.ExactlyOne;
+
+        ToProjectsCommand.Add(SolutionOption);
+        ToProjectsCommand.Add(ScanDirectoryOption);
+
+        ToPackagesCommand.Add(SolutionOption);
+        ToPackagesCommand.Add(ScanDirectoryOption);
+
+        var root = new RootCommand("Automates switching references between packages and projects.")
         {
             TreatUnmatchedTokensAsErrors = true,
         };
 
-        command.Add(ModeOption);
-        command.Add(UseProjectReferencesOption);
-        command.Add(UsePackageReferencesOption);
-        command.Add(SolutionOption);
-        command.Add(ScanDirectoryOption);
-        command.Add(HelpOption);
-
-        return command;
+        root.Add(ToProjectsCommand);
+        root.Add(ToPackagesCommand);
+        return root;
     }
 
-    private static Result<SwitchMode> ResolveMode(ParseResult parseResult)
-    {
-        var useProjects = parseResult.GetValue(UseProjectReferencesOption);
-        var usePackages = parseResult.GetValue(UsePackageReferencesOption);
+    public static RootCommand BuildRootCommand() => Root;
 
-        if (useProjects && usePackages)
-            return Result.Failure<SwitchMode>("Choose either --use-projects or --use-packages, not both.");
-
-        var modeOptionResult = parseResult.GetResult(ModeOption);
-        if (modeOptionResult is not null)
-        {
-            var rawModeResult = ReadRequiredOption(parseResult, ModeOption, "You must specify the execution mode.", "Missing value for --mode.");
-            if (rawModeResult.IsFailure)
-                return Result.Failure<SwitchMode>(rawModeResult.Error);
-
-            var parsedModeResult = ParseMode(rawModeResult.Value);
-            if (parsedModeResult.IsFailure)
-                return parsedModeResult;
-
-            if (useProjects && parsedModeResult.Value != SwitchMode.PackageToProject)
-                return Result.Failure<SwitchMode>("Conflicting mode arguments were provided. Remove --use-projects or adjust --mode.");
-
-            if (usePackages && parsedModeResult.Value != SwitchMode.ProjectToPackage)
-                return Result.Failure<SwitchMode>("Conflicting mode arguments were provided. Remove --use-packages or adjust --mode.");
-
-            return parsedModeResult;
-        }
-
-        if (useProjects)
-            return Result.Success(SwitchMode.PackageToProject);
-
-        if (usePackages)
-            return Result.Success(SwitchMode.ProjectToPackage);
-
-        return Result.Failure<SwitchMode>("You must specify the execution mode.");
-    }
-
-    private static Result<string> ReadRequiredOption(ParseResult parseResult, Option<string> option, string missingOptionMessage, string missingValueMessage)
-    {
-        var optionResult = parseResult.GetResult(option);
-        if (optionResult is null)
-            return Result.Failure<string>(missingOptionMessage);
-
-        if (optionResult.Tokens.Count == 0)
-            return Result.Failure<string>(missingValueMessage);
-
-        var value = parseResult.GetValue(option);
-        if (string.IsNullOrWhiteSpace(value))
-            return Result.Failure<string>(missingValueMessage);
-
-        return Result.Success(value);
-    }
-
-    private static Result<SwitchMode> ParseMode(string value)
-    {
-        switch (value.ToLowerInvariant())
-        {
-            case "package-to-project":
-            case "packages-to-projects":
-            case "package2project":
-                return Result.Success(SwitchMode.PackageToProject);
-            case "project-to-package":
-            case "projects-to-packages":
-            case "project2package":
-                return Result.Success(SwitchMode.ProjectToPackage);
-            default:
-                return Result.Failure<SwitchMode>($"Unknown mode: {value}.");
-        }
-    }
-
-    private static string BuildUsage(string? error)
+    public static string BuildUsage()
     {
         var builder = new StringBuilder();
-        if (!string.IsNullOrWhiteSpace(error))
-        {
-            builder.AppendLine(error);
-            builder.AppendLine();
-        }
 
         builder.AppendLine("Usage:");
-        builder.Append("  ");
-        builder.Append(ExecutableDisplayName);
+        builder.AppendLine($"  ReferenceSwitcher to-projects {FormatUsage(SolutionOption)} {FormatUsage(ScanDirectoryOption)}");
+        builder.AppendLine($"  ReferenceSwitcher to-packages {FormatUsage(SolutionOption)} {FormatUsage(ScanDirectoryOption)}");
+        builder.AppendLine();
+        builder.AppendLine(Root.Description);
+        builder.AppendLine();
 
-        foreach (var option in RootCommand.Options)
-        {
-            builder.Append(' ');
-            builder.Append(FormatUsage(option));
-        }
+        builder.AppendLine("Subcommands:");
+        builder.AppendLine("  to-projects    Switch PackageReference items to local ProjectReference entries.");
+        builder.AppendLine("  to-packages    Switch local ProjectReference items back to PackageReference entries.");
+        builder.AppendLine();
 
-        builder.AppendLine();
-        builder.AppendLine();
-        builder.AppendLine(RootCommand.Description);
-        builder.AppendLine();
         builder.AppendLine("Options:");
 
-        foreach (var option in RootCommand.Options)
+        foreach (var option in new Option[] { SolutionOption, ScanDirectoryOption })
         {
             var aliases = string.Join(", ", option.Aliases.Select(FormatAlias));
             builder.Append("  ");
@@ -215,17 +89,67 @@ internal static class ArgumentParser
         return builder.ToString();
     }
 
+    public static Result<AppArguments> ParseToArguments(string[] args)
+    {
+        var parseResult = Root.Parse(args);
+
+        if (parseResult.UnmatchedTokens.Count > 0)
+        {
+            var unknown = parseResult.UnmatchedTokens[0];
+            return Result.Failure<AppArguments>($"Unknown argument: {unknown}");
+        }
+
+        var mode = ResolveModeFromArgs(args);
+        if (mode.IsFailure)
+            return mode.ConvertFailure<AppArguments>();
+
+        var solutionResult = ReadRequiredOption(parseResult, SolutionOption, "You must specify the solution path.", "Missing value for --solution.");
+        if (solutionResult.IsFailure)
+            return Result.Failure<AppArguments>(solutionResult.Error);
+
+        var scanDirectoryResult = ReadRequiredOption(parseResult, ScanDirectoryOption, "You must specify the scan directory.", "Missing value for --scan-directory.");
+        if (scanDirectoryResult.IsFailure)
+            return Result.Failure<AppArguments>(scanDirectoryResult.Error);
+
+        var normalizedSolution = Path.GetFullPath(solutionResult.Value);
+        var normalizedScanDirectory = Path.GetFullPath(scanDirectoryResult.Value);
+
+        return Result.Success(new AppArguments(mode.Value, normalizedSolution, normalizedScanDirectory));
+    }
+
+    private static Result<SwitchMode> ResolveModeFromArgs(string[] args)
+    {
+        if (args.Any(a => string.Equals(a, "to-projects", StringComparison.OrdinalIgnoreCase)))
+            return Result.Success(SwitchMode.PackageToProject);
+
+        if (args.Any(a => string.Equals(a, "to-packages", StringComparison.OrdinalIgnoreCase)))
+            return Result.Success(SwitchMode.ProjectToPackage);
+
+        return Result.Failure<SwitchMode>("You must specify a subcommand: 'to-projects' or 'to-packages'.");
+    }
+
+    private static Result<string> ReadRequiredOption(ParseResult parseResult, Option<string> option, string missingOptionMessage, string missingValueMessage)
+    {
+        var optionResult = parseResult.GetResult(option);
+        if (optionResult is null)
+            return Result.Failure<string>(missingOptionMessage);
+
+        if (optionResult.Tokens.Count == 0)
+            return Result.Failure<string>(missingValueMessage);
+
+        var value = parseResult.GetValue(option);
+        if (string.IsNullOrWhiteSpace(value))
+            return Result.Failure<string>(missingValueMessage);
+
+        return Result.Success(value);
+    }
+
     private static string FormatUsage(Option option)
     {
         var alias = option.Aliases.FirstOrDefault() ?? option.Name;
         var usageAlias = FormatAlias(alias);
         var valueName = string.IsNullOrWhiteSpace(option.HelpName) ? "value" : option.HelpName;
-
-        return option.Arity.MaximumNumberOfValues switch
-        {
-            0 => usageAlias,
-            _ => $"{usageAlias} <{valueName}>",
-        };
+        return $"{usageAlias} <{valueName}>";
     }
 
     private static string FormatAlias(string alias)
