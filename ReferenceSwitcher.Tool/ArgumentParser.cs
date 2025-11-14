@@ -33,9 +33,7 @@ internal static class ArgumentParser
         SolutionOption.Arity = ArgumentArity.ExactlyOne;
         ScanDirectoryOption.Arity = ArgumentArity.ExactlyOne;
 
-        // Backward-compatible aliases from origin/master
-        SolutionOption.AddAlias("--solution-file");
-        ScanDirectoryOption.AddAlias("--projects-folder");
+        // Note: System.CommandLine 2.0.0 does not expose AddAlias; keeping primary aliases (-s/-d)
 
         ToProjectsCommand.Add(SolutionOption);
         ToProjectsCommand.Add(ScanDirectoryOption);
