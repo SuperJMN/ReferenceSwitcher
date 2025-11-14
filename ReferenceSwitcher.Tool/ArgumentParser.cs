@@ -102,7 +102,7 @@ internal static class ArgumentParser
             return Result.Failure<AppArguments>($"Unknown argument: {unknown}");
         }
 
-        var mode = ResolveModeFromArgs(args);
+        var mode = ResolveModeFromParseResult(parseResult);
         if (mode.IsFailure)
             return mode.ConvertFailure<AppArguments>();
 
@@ -120,15 +120,20 @@ internal static class ArgumentParser
         return Result.Success(new AppArguments(mode.Value, normalizedSolution, normalizedScanDirectory));
     }
 
-    private static Result<SwitchMode> ResolveModeFromArgs(string[] args)
+    private static Result<SwitchMode> ResolveModeFromParseResult(ParseResult parseResult)
     {
-        if (args.Any(a => string.Equals(a, "to-projects", StringComparison.OrdinalIgnoreCase)))
+        var commandResult = parseResult.CommandResult;
+
+        if (commandResult.Parent is null || ReferenceEquals(commandResult.Command, Root))
+            return Result.Failure<SwitchMode>("You must specify a subcommand: 'to-projects' or 'to-packages'.");
+
+        if (ReferenceEquals(commandResult.Command, ToProjectsCommand))
             return Result.Success(SwitchMode.PackageToProject);
 
-        if (args.Any(a => string.Equals(a, "to-packages", StringComparison.OrdinalIgnoreCase)))
+        if (ReferenceEquals(commandResult.Command, ToPackagesCommand))
             return Result.Success(SwitchMode.ProjectToPackage);
 
-        return Result.Failure<SwitchMode>("You must specify a subcommand: 'to-projects' or 'to-packages'.");
+        return Result.Failure<SwitchMode>("You must specify a valid subcommand: 'to-projects' or 'to-packages'.");
     }
 
     private static Result<string> ReadRequiredOption(ParseResult parseResult, Option<string> option, string missingOptionMessage, string missingValueMessage)
