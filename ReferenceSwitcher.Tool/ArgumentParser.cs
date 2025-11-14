@@ -12,32 +12,32 @@ internal static class ArgumentParser
 {
     private const string ExecutableDisplayName = "ReferenceSwitcher";
 
-    private static readonly Option<string> ModeOption = new("--mode", "-m")
+    private static readonly Option<string> ModeOption = new("--switch-direction", "-m")
     {
-        Description = "Defines the execution mode.",
-        HelpName = "mode",
+        Description = "Choose how references should be converted.",
+        HelpName = "direction",
     };
 
-    private static readonly Option<bool> UseProjectReferencesOption = new("--use-projects")
+    private static readonly Option<bool> UseProjectReferencesOption = new("--switch-to-projects")
     {
-        Description = "Switch PackageReference items to local ProjectReference entries.",
+        Description = "Convert NuGet package references into local project references.",
     };
 
-    private static readonly Option<bool> UsePackageReferencesOption = new("--use-packages")
+    private static readonly Option<bool> UsePackageReferencesOption = new("--switch-to-packages")
     {
-        Description = "Switch local ProjectReference items back to PackageReference entries.",
+        Description = "Convert local project references back into NuGet package references.",
     };
 
-    private static readonly Option<string> SolutionOption = new("--solution", "-s")
+    private static readonly Option<string> SolutionOption = new("--solution-file", "-s")
     {
-        Description = "Path to the base .sln file.",
-        HelpName = "path",
+        Description = "Path to the solution file that orchestrates the switch.",
+        HelpName = "solution",
     };
 
-    private static readonly Option<string> ScanDirectoryOption = new("--scan-directory", "-d")
+    private static readonly Option<string> ScanDirectoryOption = new("--projects-folder", "-d")
     {
-        Description = "Directory to scan for local projects.",
-        HelpName = "directory",
+        Description = "Directory containing the projects that should be inspected.",
+        HelpName = "folder",
     };
 
     private static readonly HelpOption HelpOption = new("--help", "-h")
@@ -68,11 +68,11 @@ internal static class ArgumentParser
         if (modeResult.IsFailure)
             return Result.Failure<AppArguments>(BuildUsage(modeResult.Error));
 
-        var solutionResult = ReadRequiredOption(parseResult, SolutionOption, "You must specify the solution path.", "Missing value for --solution.");
+        var solutionResult = ReadRequiredOption(parseResult, SolutionOption, "You must specify the solution path.", "Missing value for --solution-file.");
         if (solutionResult.IsFailure)
             return Result.Failure<AppArguments>(BuildUsage(solutionResult.Error));
 
-        var scanDirectoryResult = ReadRequiredOption(parseResult, ScanDirectoryOption, "You must specify the scan directory.", "Missing value for --scan-directory.");
+        var scanDirectoryResult = ReadRequiredOption(parseResult, ScanDirectoryOption, "You must specify the scan directory.", "Missing value for --projects-folder.");
         if (scanDirectoryResult.IsFailure)
             return Result.Failure<AppArguments>(BuildUsage(scanDirectoryResult.Error));
 
@@ -105,12 +105,12 @@ internal static class ArgumentParser
         var usePackages = parseResult.GetValue(UsePackageReferencesOption);
 
         if (useProjects && usePackages)
-            return Result.Failure<SwitchMode>("Choose either --use-projects or --use-packages, not both.");
+            return Result.Failure<SwitchMode>("Choose either --switch-to-projects or --switch-to-packages, not both.");
 
         var modeOptionResult = parseResult.GetResult(ModeOption);
         if (modeOptionResult is not null)
         {
-            var rawModeResult = ReadRequiredOption(parseResult, ModeOption, "You must specify the execution mode.", "Missing value for --mode.");
+            var rawModeResult = ReadRequiredOption(parseResult, ModeOption, "You must specify how references should be switched.", "Missing value for --switch-direction.");
             if (rawModeResult.IsFailure)
                 return Result.Failure<SwitchMode>(rawModeResult.Error);
 
@@ -119,10 +119,10 @@ internal static class ArgumentParser
                 return parsedModeResult;
 
             if (useProjects && parsedModeResult.Value != SwitchMode.PackageToProject)
-                return Result.Failure<SwitchMode>("Conflicting mode arguments were provided. Remove --use-projects or adjust --mode.");
+                return Result.Failure<SwitchMode>("Conflicting mode arguments were provided. Remove --switch-to-projects or adjust --switch-direction.");
 
             if (usePackages && parsedModeResult.Value != SwitchMode.ProjectToPackage)
-                return Result.Failure<SwitchMode>("Conflicting mode arguments were provided. Remove --use-packages or adjust --mode.");
+                return Result.Failure<SwitchMode>("Conflicting mode arguments were provided. Remove --switch-to-packages or adjust --switch-direction.");
 
             return parsedModeResult;
         }
@@ -133,7 +133,7 @@ internal static class ArgumentParser
         if (usePackages)
             return Result.Success(SwitchMode.ProjectToPackage);
 
-        return Result.Failure<SwitchMode>("You must specify the execution mode.");
+        return Result.Failure<SwitchMode>("You must specify how references should be switched.");
     }
 
     private static Result<string> ReadRequiredOption(ParseResult parseResult, Option<string> option, string missingOptionMessage, string missingValueMessage)
@@ -165,7 +165,7 @@ internal static class ArgumentParser
             case "project2package":
                 return Result.Success(SwitchMode.ProjectToPackage);
             default:
-                return Result.Failure<SwitchMode>($"Unknown mode: {value}.");
+                return Result.Failure<SwitchMode>($"Unknown switch direction: {value}.");
         }
     }
 
