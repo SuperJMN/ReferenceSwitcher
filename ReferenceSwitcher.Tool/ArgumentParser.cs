@@ -122,14 +122,15 @@ internal static class ArgumentParser
 
     private static Result<SwitchMode> ResolveModeFromParseResult(ParseResult parseResult)
     {
-        var subcommandResult = parseResult.CommandResult.Children.OfType<CommandResult>().FirstOrDefault();
-        if (subcommandResult is null)
+        var commandResult = parseResult.CommandResult;
+
+        if (commandResult.Parent is null || ReferenceEquals(commandResult.Command, Root))
             return Result.Failure<SwitchMode>("You must specify a subcommand: 'to-projects' or 'to-packages'.");
 
-        if (ReferenceEquals(subcommandResult.Command, ToProjectsCommand))
+        if (ReferenceEquals(commandResult.Command, ToProjectsCommand))
             return Result.Success(SwitchMode.PackageToProject);
 
-        if (ReferenceEquals(subcommandResult.Command, ToPackagesCommand))
+        if (ReferenceEquals(commandResult.Command, ToPackagesCommand))
             return Result.Success(SwitchMode.ProjectToPackage);
 
         return Result.Failure<SwitchMode>("You must specify a valid subcommand: 'to-projects' or 'to-packages'.");
