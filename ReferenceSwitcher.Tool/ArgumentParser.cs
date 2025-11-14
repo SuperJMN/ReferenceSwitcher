@@ -9,6 +9,7 @@ namespace ReferenceSwitcher.Tool;
 
 internal static class ArgumentParser
 {
+    // Primary aliases requested; keep backward-compatible aliases from origin/master
     private static readonly Option<string> SolutionOption = new("--solution", "-s")
     {
         Description = "Path to the base .sln file.",
@@ -28,9 +29,13 @@ internal static class ArgumentParser
 
     private static RootCommand CreateRootCommand()
     {
-        // Mark as required in help by forcing exactly one value
+        // Required arity (displayed as required in help and enforced in parsing)
         SolutionOption.Arity = ArgumentArity.ExactlyOne;
         ScanDirectoryOption.Arity = ArgumentArity.ExactlyOne;
+
+        // Backward-compatible aliases from origin/master
+        SolutionOption.AddAlias("--solution-file");
+        ScanDirectoryOption.AddAlias("--projects-folder");
 
         ToProjectsCommand.Add(SolutionOption);
         ToProjectsCommand.Add(ScanDirectoryOption);
