@@ -20,10 +20,13 @@ internal sealed class ProjectToPackageSwitcher
 
     public Result Switch(IReadOnlyCollection<string> rootProjects)
     {
+        var solutionProjects = new HashSet<string>(
+            rootProjects.Select(Path.GetFullPath),
+            StringComparer.OrdinalIgnoreCase);
         var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var project in rootProjects)
         {
-            var result = ReplaceProjects(project, visited);
+            var result = ReplaceProjects(project, visited, solutionProjects);
             if (result.IsFailure)
                 return result;
         }
@@ -31,7 +34,7 @@ internal sealed class ProjectToPackageSwitcher
         return Result.Success();
     }
 
-    private Result ReplaceProjects(string projectPath, ISet<string> visited)
+    private Result ReplaceProjects(string projectPath, ISet<string> visited, ISet<string> solutionProjects)
     {
         var normalizedPath = Path.GetFullPath(projectPath);
         if (!visited.Add(normalizedPath))
@@ -70,24 +73,34 @@ internal sealed class ProjectToPackageSwitcher
                 .Descendants(ns + "PackageReference")
                 .Any(x => string.Equals(x.Attribute("Include")?.Value, metadata.PackageId, StringComparison.OrdinalIgnoreCase));
 
-            projectReference.Remove();
-            changed = true;
-            if (parentGroup is not null)
-                groupsToReview.Add(parentGroup);
-
-            if (alreadyExists)
+            if (solutionProjects.Contains(metadata.ProjectPath))
             {
-                writer.WriteLine($"[{metadata.PackageId}] PackageReference already exists in '{normalizedPath}'. Removed ProjectReference.");
+                writer.WriteLine(
+                    $"[{metadata.PackageId}] ProjectReference kept in '{normalizedPath}' because '{metadata.ProjectPath}' belongs to the provided solution.");
             }
             else
             {
-                var targetGroup = parentGroup ?? FindOrCreatePackageGroup(document, ns);
-                var packageReference = new XElement(ns + "PackageReference", new XAttribute("Include", metadata.PackageId));
-                targetGroup.Add(packageReference);
-                writer.WriteLine($"[{metadata.PackageId}] Replaced ProjectReference with PackageReference in '{normalizedPath}'.");
+                projectReference.Remove();
+                changed = true;
+                if (parentGroup is not null)
+                    groupsToReview.Add(parentGroup);
+
+                if (alreadyExists)
+                {
+                    writer.WriteLine(
+                        $"[{metadata.PackageId}] PackageReference already exists in '{normalizedPath}'. Removed ProjectReference.");
+                }
+                else
+                {
+                    var targetGroup = parentGroup ?? FindOrCreatePackageGroup(document, ns);
+                    var packageReference = new XElement(ns + "PackageReference", new XAttribute("Include", metadata.PackageId));
+                    targetGroup.Add(packageReference);
+                    writer.WriteLine(
+                        $"[{metadata.PackageId}] Replaced ProjectReference with PackageReference in '{normalizedPath}'.");
+                }
             }
 
-            var recursionResult = ReplaceProjects(metadata.ProjectPath, visited);
+            var recursionResult = ReplaceProjects(metadata.ProjectPath, visited, solutionProjects);
             if (recursionResult.IsFailure)
                 return recursionResult;
         }
