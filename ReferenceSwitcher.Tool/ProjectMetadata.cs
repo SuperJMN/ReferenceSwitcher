@@ -7,9 +7,18 @@ using CSharpFunctionalExtensions;
 
 namespace ReferenceSwitcher.Tool;
 
-internal sealed record ProjectMetadata(string PackageId, string ProjectPath, string ProjectName)
+internal sealed record ProjectMetadata(string PackageId, string ProjectPath, string ProjectName, ProjectReferenceKind ReferenceKind)
 {
+    private static readonly string[] AnalyzerSelfReferenceTokens =
+    {
+        "$(TargetPath)",
+        "$(TargetDir)",
+        "$(OutDir)",
+        "$(OutputPath)",
+    };
+
     public bool HasPackageId => !string.IsNullOrWhiteSpace(PackageId);
+    public bool IsAnalyzer => ReferenceKind == ProjectReferenceKind.Analyzer;
 
     public static Result<ProjectMetadata> Create(string projectPath)
     {
@@ -35,13 +44,54 @@ internal sealed record ProjectMetadata(string PackageId, string ProjectPath, str
                 packageId = projectName;
 
             var normalizedPath = Path.GetFullPath(projectPath);
+            var referenceKind = DetermineReferenceKind(document, ns);
 
-            return Result.Success(new ProjectMetadata(packageId, normalizedPath, projectName));
+            return Result.Success(new ProjectMetadata(packageId, normalizedPath, projectName, referenceKind));
         }
         catch (Exception exception)
         {
             return Result.Failure<ProjectMetadata>($"Failed to parse project '{projectPath}': {exception.Message}");
         }
+    }
+
+    private static ProjectReferenceKind DetermineReferenceKind(XDocument document, XNamespace ns)
+    {
+        var isAnalyzer = HasAnalyzerPackageType(document, ns)
+            || HasTrueElement(document, ns, "IsRoslynAnalyzer")
+            || HasAnalyzerOutputItemType(document, ns)
+            || HasAnalyzerItem(document, ns);
+
+        return isAnalyzer ? ProjectReferenceKind.Analyzer : ProjectReferenceKind.Default;
+    }
+
+    private static bool HasTrueElement(XDocument document, XNamespace ns, string elementName)
+    {
+        return ReadElementValue(document, ns, elementName)
+            .Match(value => value.Equals("true", StringComparison.OrdinalIgnoreCase), () => false);
+    }
+
+    private static bool HasAnalyzerOutputItemType(XDocument document, XNamespace ns)
+    {
+        return ReadElementValue(document, ns, "OutputItemType")
+            .Match(value => value.Equals("Analyzer", StringComparison.OrdinalIgnoreCase), () => false);
+    }
+
+    private static bool HasAnalyzerPackageType(XDocument document, XNamespace ns)
+    {
+        return ReadElementValue(document, ns, "PackageType")
+            .Match(value => value
+                .Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries)
+                .Any(part => part.Trim().Equals("Analyzer", StringComparison.OrdinalIgnoreCase)), () => false);
+    }
+
+    private static bool HasAnalyzerItem(XDocument document, XNamespace ns)
+    {
+        return document
+            .Descendants(ns + "Analyzer")
+            .Select(element => element.Attribute("Include")?.Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Any(include => AnalyzerSelfReferenceTokens.Any(token =>
+                include!.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0));
     }
 
     private static Maybe<string> ReadPackageId(XDocument document, string projectPath)
