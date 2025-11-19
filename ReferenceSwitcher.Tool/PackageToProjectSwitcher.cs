@@ -142,15 +142,13 @@ internal sealed class PackageToProjectSwitcher
 
     private static bool ApplyProjectReferenceAttributes(XElement projectReference, ProjectMetadata metadata)
     {
-        if (metadata.IsAnalyzer)
-        {
-            var updated = false;
-            updated |= EnsureAttribute(projectReference, "OutputItemType", "Analyzer");
-            updated |= EnsureAttribute(projectReference, "ReferenceOutputAssembly", "false");
-            return updated;
-        }
+        if (!metadata.IsAnalyzer)
+            return false;
 
-        return RemoveAnalyzerAttributes(projectReference);
+        var updated = false;
+        updated |= EnsureAttribute(projectReference, "OutputItemType", "Analyzer");
+        updated |= EnsureAttribute(projectReference, "ReferenceOutputAssembly", "false");
+        return updated;
     }
 
     private static bool EnsureAttribute(XElement projectReference, string attributeName, string value)
@@ -163,24 +161,6 @@ internal sealed class PackageToProjectSwitcher
         }
 
         return false;
-    }
-
-    private static bool RemoveAnalyzerAttributes(XElement projectReference)
-    {
-        var removed = false;
-        removed |= RemoveAttribute(projectReference, "OutputItemType");
-        removed |= RemoveAttribute(projectReference, "ReferenceOutputAssembly");
-        return removed;
-    }
-
-    private static bool RemoveAttribute(XElement projectReference, string attributeName)
-    {
-        var attribute = projectReference.Attribute(attributeName);
-        if (attribute is null)
-            return false;
-
-        attribute.Remove();
-        return true;
     }
 
     private static XElement CreateItemGroup(XDocument document, XNamespace ns)
