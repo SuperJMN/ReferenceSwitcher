@@ -77,13 +77,17 @@ internal sealed class PackageToProjectSwitcher
 
             if (existingProjectReference is null)
             {
-                var projectReference = new XElement(ns + "ProjectReference", new XAttribute("Include", normalizedRelativePath));
+                var projectReference = CreateProjectReference(metadata, normalizedRelativePath, ns);
                 parentGroup ??= CreateItemGroup(document, ns);
                 parentGroup.Add(projectReference);
                 writer.WriteLine($"[{metadata.PackageId}] Replaced PackageReference with ProjectReference in '{normalizedPath}'.");
             }
             else
             {
+                var attributesChanged = ApplyProjectReferenceAttributes(existingProjectReference, metadata);
+                if (attributesChanged)
+                    changed = true;
+
                 writer.WriteLine($"[{metadata.PackageId}] ProjectReference already exists in '{normalizedPath}'. Removing duplicate PackageReference.");
             }
 
@@ -127,6 +131,36 @@ internal sealed class PackageToProjectSwitcher
             error = $"Failed to read '{projectPath}': {exception.Message}";
             return false;
         }
+    }
+
+    private static XElement CreateProjectReference(ProjectMetadata metadata, string include, XNamespace ns)
+    {
+        var projectReference = new XElement(ns + "ProjectReference", new XAttribute("Include", include));
+        ApplyProjectReferenceAttributes(projectReference, metadata);
+        return projectReference;
+    }
+
+    private static bool ApplyProjectReferenceAttributes(XElement projectReference, ProjectMetadata metadata)
+    {
+        if (!metadata.IsAnalyzer)
+            return false;
+
+        var updated = false;
+        updated |= EnsureAttribute(projectReference, "OutputItemType", "Analyzer");
+        updated |= EnsureAttribute(projectReference, "ReferenceOutputAssembly", "false");
+        return updated;
+    }
+
+    private static bool EnsureAttribute(XElement projectReference, string attributeName, string value)
+    {
+        var attribute = projectReference.Attribute(attributeName);
+        if (attribute is null || !string.Equals(attribute.Value, value, StringComparison.Ordinal))
+        {
+            projectReference.SetAttributeValue(attributeName, value);
+            return true;
+        }
+
+        return false;
     }
 
     private static XElement CreateItemGroup(XDocument document, XNamespace ns)
