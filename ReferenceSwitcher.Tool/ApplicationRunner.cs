@@ -25,11 +25,34 @@ internal sealed class ApplicationRunner
 
     private Result Execute(IReadOnlyCollection<string> solutionProjects, ProjectIndex projectIndex)
     {
-        return arguments.Mode switch
+        switch (arguments.Mode)
         {
-            SwitchMode.PackageToProject => new PackageToProjectSwitcher(projectIndex, writer).Switch(solutionProjects),
-            SwitchMode.ProjectToPackage => new ProjectToPackageSwitcher(projectIndex, writer).Switch(solutionProjects),
-            _ => Result.Failure("Unsupported mode.")
-        };
+            case SwitchMode.PackageToProject:
+            {
+                var switcher = new PackageToProjectSwitcher(projectIndex, writer);
+                var result = switcher.Switch(solutionProjects);
+                if (result.IsFailure)
+                    return result;
+
+                if (!arguments.UpdateSolution)
+                    return Result.Success();
+
+                return SolutionProjectAdder.AddProjects(arguments.SolutionPath, solutionProjects, switcher.DiscoveredProjects);
+            }
+            case SwitchMode.ProjectToPackage:
+            {
+                var switcher = new ProjectToPackageSwitcher(projectIndex, writer);
+                var result = switcher.Switch(solutionProjects);
+                if (result.IsFailure)
+                    return result;
+
+                if (!arguments.UpdateSolution)
+                    return Result.Success();
+
+                return SolutionForeignProjectRemover.RemoveForeignProjects(arguments.SolutionPath);
+            }
+            default:
+                return Result.Failure("Unsupported mode.");
+        }
     }
 }

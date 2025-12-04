@@ -11,12 +11,15 @@ internal sealed class PackageToProjectSwitcher
 {
     private readonly ProjectIndex projectIndex;
     private readonly TextWriter writer;
+    private readonly HashSet<string> discoveredProjects = new(StringComparer.OrdinalIgnoreCase);
 
     public PackageToProjectSwitcher(ProjectIndex projectIndex, TextWriter writer)
     {
         this.projectIndex = projectIndex;
         this.writer = writer;
     }
+
+    public IReadOnlyCollection<string> DiscoveredProjects => discoveredProjects;
 
     public Result Switch(IReadOnlyCollection<string> rootProjects)
     {
@@ -65,6 +68,8 @@ internal sealed class PackageToProjectSwitcher
             var metadata = metadataOption.Value;
             if (string.Equals(metadata.ProjectPath, normalizedPath, StringComparison.OrdinalIgnoreCase))
                 continue;
+
+            discoveredProjects.Add(metadata.ProjectPath);
 
             var relativePath = Path.GetRelativePath(projectDirectory, metadata.ProjectPath);
             var normalizedRelativePath = NormalizeRelativePath(relativePath);

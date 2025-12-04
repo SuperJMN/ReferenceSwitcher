@@ -18,6 +18,11 @@ internal static class ArgumentParser
             Required = true
         };
 
+        var updateSolutionOption = new Option<bool>("--add-projects-to-solution")
+        {
+            Description = "Update the solution file to reflect switched references (add or remove projects)."
+        };
+
         var rootCommand = new RootCommand("Automates switching references between packages and projects.")
         {
             BuildCommand("to-projects", "Switch PackageReference items to local ProjectReference entries.", SwitchMode.PackageToProject),
@@ -31,27 +36,29 @@ internal static class ArgumentParser
             var command = new Command(name, description)
             {
                 solutionOption,
-                scanDirectoryOption
+                scanDirectoryOption,
+                updateSolutionOption
             };
 
             command.SetAction(parseResult =>
             {
                 var solutionFile = parseResult.GetValue(solutionOption);
                 var scanDirectory = parseResult.GetValue(scanDirectoryOption);
+                var updateSolution = parseResult.GetValue(updateSolutionOption);
 
                 ArgumentNullException.ThrowIfNull(solutionFile);
                 ArgumentNullException.ThrowIfNull(scanDirectory);
 
-                RunSwitch(mode, solutionFile, scanDirectory);
+                RunSwitch(mode, solutionFile, scanDirectory, updateSolution);
             });
 
             return command;
         }
     }
 
-    private static void RunSwitch(SwitchMode mode, FileInfo solutionFile, DirectoryInfo scanDirectory)
+    private static void RunSwitch(SwitchMode mode, FileInfo solutionFile, DirectoryInfo scanDirectory, bool updateSolution)
     {
-        var arguments = new AppArguments(mode, solutionFile.FullName, scanDirectory.FullName);
+        var arguments = new AppArguments(mode, solutionFile.FullName, scanDirectory.FullName, updateSolution);
         var result = new ApplicationRunner(arguments, Console.Out).Run();
 
         if (result.IsFailure)
