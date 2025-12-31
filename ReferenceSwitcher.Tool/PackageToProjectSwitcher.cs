@@ -117,7 +117,7 @@ internal sealed class PackageToProjectSwitcher
         }
 
         if (changed)
-            document.Save(normalizedPath);
+            document.Save(normalizedPath, SaveOptions.DisableFormatting);
 
         return Result.Success();
     }
@@ -126,7 +126,7 @@ internal sealed class PackageToProjectSwitcher
     {
         try
         {
-            document = XDocument.Load(projectPath);
+            document = XDocument.Load(projectPath, LoadOptions.PreserveWhitespace);
             error = string.Empty;
             return true;
         }

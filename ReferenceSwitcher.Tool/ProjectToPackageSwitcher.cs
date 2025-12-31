@@ -67,6 +67,14 @@ internal sealed class ProjectToPackageSwitcher
                 continue;
 
             var metadata = metadataOption.Value;
+
+            // Skip if referenced project is in the same repository (preserve internal references)
+            var currentRoot = FindReferenceRoot(projectDirectory);
+            var referencedDirectory = Path.GetDirectoryName(metadata.ProjectPath) ?? projectDirectory;
+            var referencedRoot = FindReferenceRoot(referencedDirectory);
+            if (string.Equals(currentRoot, referencedRoot, StringComparison.OrdinalIgnoreCase))
+                continue;
+
             var parentGroup = projectReference.Parent as XElement;
 
             var alreadyExists = document
@@ -115,7 +123,7 @@ internal sealed class ProjectToPackageSwitcher
         }
 
         if (changed)
-            document.Save(normalizedPath);
+            document.Save(normalizedPath, SaveOptions.DisableFormatting);
 
         return Result.Success();
     }
@@ -124,7 +132,7 @@ internal sealed class ProjectToPackageSwitcher
     {
         try
         {
-            document = XDocument.Load(projectPath);
+            document = XDocument.Load(projectPath, LoadOptions.PreserveWhitespace);
             error = string.Empty;
             return true;
         }
@@ -148,5 +156,22 @@ internal sealed class ProjectToPackageSwitcher
         var newGroup = new XElement(ns + "ItemGroup");
         document.Root?.Add(newGroup);
         return newGroup;
+    }
+
+    private static string FindReferenceRoot(string directory)
+    {
+        var current = directory;
+        while (!string.IsNullOrWhiteSpace(current))
+        {
+            var gitDirectory = Path.Combine(current, ".git");
+            if (Directory.Exists(gitDirectory))
+                return current;
+
+            current = Path.GetDirectoryName(current);
+        }
+
+        // No repository found: use the parent directory.
+        var parent = Path.GetDirectoryName(directory);
+        return string.IsNullOrWhiteSpace(parent) ? directory : parent;
     }
 }
