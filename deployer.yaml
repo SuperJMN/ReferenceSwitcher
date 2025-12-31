@@ -1,0 +1,9 @@
+# DotnetDeployer Configuration
+# Publishes ReferenceSwitcher.Tool to NuGet
+
+version: 1
+
+nuget:
+  enabled: true
+  source: https://api.nuget.org/v3/index.json
+  apiKeyEnvVar: NUGET_API_KEY
