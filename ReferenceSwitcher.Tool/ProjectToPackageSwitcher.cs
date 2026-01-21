@@ -48,6 +48,15 @@ internal sealed class ProjectToPackageSwitcher
 
         var projectDirectory = Path.GetDirectoryName(normalizedPath) ?? Directory.GetCurrentDirectory();
         var ns = document.Root?.Name.Namespace ?? XNamespace.None;
+
+        // Collect paths to recurse into BEFORE we modify the document (removing references)
+        var projectPathsToVisit = document
+            .Descendants(ns + "ProjectReference")
+            .Select(x => x.Attribute("Include")?.Value)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => Path.GetFullPath(Path.Combine(projectDirectory, x!.Replace('\\', Path.DirectorySeparatorChar))))
+            .ToList();
+
         var projectReferences = document
             .Descendants(ns + "ProjectReference")
             .ToList();
@@ -61,7 +70,7 @@ internal sealed class ProjectToPackageSwitcher
             if (string.IsNullOrWhiteSpace(include))
                 continue;
 
-            var absoluteReference = Path.GetFullPath(Path.Combine(projectDirectory, include));
+            var absoluteReference = Path.GetFullPath(Path.Combine(projectDirectory, include.Replace('\\', Path.DirectorySeparatorChar)));
             var metadataOption = projectIndex.FindByPath(absoluteReference);
             if (metadataOption.HasNoValue)
                 continue;
@@ -107,8 +116,12 @@ internal sealed class ProjectToPackageSwitcher
                         $"[{metadata.PackageId}] Replaced ProjectReference with PackageReference in '{normalizedPath}'.");
                 }
             }
+        }
 
-            var recursionResult = ReplaceProjects(metadata.ProjectPath, visited, solutionProjects);
+        // Recursively visit all ProjectReferences (identified before modification)
+        foreach (var projectPathToVisit in projectPathsToVisit)
+        {
+            var recursionResult = ReplaceProjects(projectPathToVisit, visited, solutionProjects);
             if (recursionResult.IsFailure)
                 return recursionResult;
         }
