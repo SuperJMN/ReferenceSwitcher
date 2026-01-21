@@ -107,6 +107,21 @@ internal sealed class PackageToProjectSwitcher
                 return recursionResult;
         }
 
+        // Recursively visit all ProjectReferences (both existing and newly created)
+        var projectReferences = document
+            .Descendants(ns + "ProjectReference")
+            .Select(x => x.Attribute("Include")?.Value)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => Path.GetFullPath(Path.Combine(projectDirectory, x!.Replace('\\', Path.DirectorySeparatorChar))))
+            .ToList();
+
+        foreach (var projectRef in projectReferences)
+        {
+            var result = ReplacePackages(projectRef, visited);
+            if (result.IsFailure)
+                return result;
+        }
+
         foreach (var group in groupsToReview)
         {
             if (!group.Elements().Any())
