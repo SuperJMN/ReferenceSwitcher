@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Xml;
 using System.Xml.Linq;
 using CSharpFunctionalExtensions;
 
@@ -97,7 +98,7 @@ internal sealed class ProjectToPackageSwitcher
             }
             else
             {
-                projectReference.Remove();
+                RemoveElementWithWhitespace(projectReference);
                 changed = true;
                 if (parentGroup is not null)
                     groupsToReview.Add(parentGroup);
@@ -111,7 +112,7 @@ internal sealed class ProjectToPackageSwitcher
                 {
                     var targetGroup = parentGroup ?? FindOrCreatePackageGroup(document, ns);
                     var packageReference = new XElement(ns + "PackageReference", new XAttribute("Include", metadata.PackageId));
-                    targetGroup.Add(packageReference);
+                    AddElementWithFormatting(targetGroup, packageReference);
                     writer.WriteLine(
                         $"[{metadata.PackageId}] Replaced ProjectReference with PackageReference in '{normalizedPath}'.");
                 }
@@ -136,7 +137,7 @@ internal sealed class ProjectToPackageSwitcher
         }
 
         if (changed)
-            document.Save(normalizedPath, SaveOptions.DisableFormatting);
+            SaveDocument(document, normalizedPath);
 
         return Result.Success();
     }
@@ -186,5 +187,127 @@ internal sealed class ProjectToPackageSwitcher
         // No repository found: use the parent directory.
         var parent = Path.GetDirectoryName(directory);
         return string.IsNullOrWhiteSpace(parent) ? directory : parent;
+    }
+
+    private static void SaveDocument(XDocument document, string path)
+    {
+        var indentChars = DetectIndentation(document);
+
+        var settings = new XmlWriterSettings
+        {
+            OmitXmlDeclaration = true,
+            Indent = true,
+            IndentChars = indentChars,
+            NewLineChars = "\n",
+            NewLineHandling = NewLineHandling.Replace
+        };
+
+        using var writer = XmlWriter.Create(path, settings);
+        document.Save(writer);
+    }
+
+    private static void AddElementWithFormatting(XElement parent, XElement newElement)
+    {
+        // Detect indentation from the parent's children
+        var indentChars = DetectElementIndentation(parent);
+
+        // Add newline and indent before the new element
+        if (parent.LastNode is XText lastText && lastText.Value.EndsWith("\n"))
+        {
+            // Parent already has proper formatting, just add indent
+            parent.Add(new XText(indentChars));
+        }
+        else if (parent.Elements().Any())
+        {
+            // Parent has elements but no trailing newline
+            parent.Add(new XText("\n" + indentChars));
+        }
+        else
+        {
+            // First element in parent
+            parent.Add(new XText("\n" + indentChars));
+        }
+
+        parent.Add(newElement);
+
+        // Add newline after the element
+        parent.Add(new XText("\n"));
+    }
+
+    private static void RemoveElementWithWhitespace(XElement element)
+    {
+        // Remove preceding whitespace-only text node if it exists
+        var previousNode = element.PreviousNode;
+        if (previousNode is XText previousText &&
+            !string.IsNullOrEmpty(previousText.Value) &&
+            previousText.Value.All(char.IsWhiteSpace))
+        {
+            previousText.Remove();
+        }
+
+        // Also check for and remove trailing newline node
+        var nextNode = element.NextNode;
+        if (nextNode is XText nextText &&
+            nextText.Value == "\n")
+        {
+            nextText.Remove();
+        }
+
+        element.Remove();
+    }
+
+    private static string DetectElementIndentation(XElement element)
+    {
+        // Look for indentation in existing child elements
+        foreach (var node in element.Nodes())
+        {
+            if (node is XText text && text.Value.Contains('\n'))
+            {
+                var lines = text.Value.Split('\n');
+                var lastLine = lines[^1];
+                if (!string.IsNullOrEmpty(lastLine) && lastLine.All(char.IsWhiteSpace))
+                {
+                    return lastLine;
+                }
+            }
+        }
+
+        // Fallback: detect from document level
+        return DetectIndentation(element.Document ?? new XDocument(element));
+    }
+
+    private static string DetectIndentation(XDocument document)
+    {
+        // Analyze whitespace-only text nodes that appear between elements
+        var whitespaceNodes = document.DescendantNodes()
+            .OfType<XText>()
+            .Where(t => !string.IsNullOrEmpty(t.Value) && t.Value.All(c => char.IsWhiteSpace(c)))
+            .ToList();
+
+        foreach (var node in whitespaceNodes)
+        {
+            var lines = node.Value.Split('\n');
+            foreach (var line in lines)
+            {
+                if (string.IsNullOrEmpty(line))
+                    continue;
+
+                // Check if it's a tab-indented document
+                if (line.StartsWith("\t"))
+                    return "\t";
+
+                // Check for spaces (common patterns: 2, 4 spaces)
+                if (line.StartsWith("  "))
+                {
+                    // Count leading spaces to determine indent level
+                    var spaceCount = line.TakeWhile(c => c == ' ').Count();
+                    if (spaceCount >= 2)
+                        return new string(' ', spaceCount >= 4 ? 4 : 2);
+                }
+            }
+        }
+
+        // Default to 2 spaces if no indentation detected
+        return "  ";
     }
 }
