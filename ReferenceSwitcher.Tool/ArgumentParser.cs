@@ -8,7 +8,7 @@ internal static class ArgumentParser
     {
         var solutionOption = new Option<FileInfo>("--solution", ["-s"])
         {
-            Description = "Path to the base .sln file.",
+            Description = "Path to the base .sln or .slnx file.",
             Required = true
         };
 

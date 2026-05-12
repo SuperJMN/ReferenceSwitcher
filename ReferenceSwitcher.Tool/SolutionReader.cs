@@ -16,6 +16,9 @@ internal static class SolutionReader
         if (!File.Exists(solutionPath))
             return Result.Failure<IReadOnlyCollection<string>>($"Solution '{solutionPath}' was not found.");
 
+        if (SlnxSolutionFile.CanHandle(solutionPath))
+            return SlnxSolutionFile.ReadProjects(solutionPath);
+
         var solutionDirectory = Path.GetDirectoryName(solutionPath) ?? Directory.GetCurrentDirectory();
         var projectPaths = new List<string>();
 

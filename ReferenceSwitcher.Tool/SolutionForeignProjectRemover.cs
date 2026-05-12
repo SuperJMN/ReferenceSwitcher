@@ -20,6 +20,9 @@ internal static class SolutionForeignProjectRemover
         if (!File.Exists(solutionPath))
             return Result.Failure($"Solution '{solutionPath}' was not found.");
 
+        if (SlnxSolutionFile.CanHandle(solutionPath))
+            return SlnxSolutionFile.RemoveForeignProjects(solutionPath);
+
         var solutionDirectory = Path.GetDirectoryName(solutionPath) ?? Directory.GetCurrentDirectory();
         var referenceRoot = FindReferenceRoot(solutionDirectory);
         var normalizedRoot = EnsureTrailingSeparator(Path.GetFullPath(referenceRoot));

@@ -22,12 +22,12 @@ Both commands share the same basic arguments:
 
 ```bash
 reference-switcher <command> \
-  --solution <path-to-sln> \
+  --solution <path-to-sln-or-slnx> \
   --scan-directory <directory-to-scan> \
   [--add-projects-to-solution]
 ```
 
-- `--solution` (`-s`): path to the `.sln` file that defines the starting projects.
+- `--solution` (`-s`): path to the `.sln` or `.slnx` file that defines the starting projects.
 - `--scan-directory` (`-d`): directory that will be scanned recursively for `.csproj` files used to build the project index.
 - `--add-projects-to-solution`: when specified, the tool also updates the solution file to reflect the changes.
 
@@ -40,6 +40,7 @@ When `--add-projects-to-solution` is used, the behavior depends on the selected 
 - After switching `PackageReference` entries to `ProjectReference`, the tool tracks all projects discovered via matching `PackageId` values.
 - Any discovered project that is not already present in the solution is added as a new `Project(...)` entry in the `.sln` file.
 - The new projects also receive entries in the `ProjectConfigurationPlatforms` section so that they participate in the existing solution configurations (for example `Debug|Any CPU` and `Release|Any CPU`).
+- For `.slnx` files, missing projects are added as `<Project Path="..." />` entries.
 
 If `--add-projects-to-solution` is **not** specified, only the `.csproj` files are updated and the solution file is left untouched.
 
@@ -51,6 +52,7 @@ If `--add-projects-to-solution` is **not** specified, only the `.csproj` files a
   - If no Git repository is found, the parent directory of the solution file is used as the reference root instead.
 - Any project whose resolved absolute `.csproj` path is not under this reference root is treated as foreign.
 - For each foreign project, the corresponding `Project(...)` / `EndProject` block is removed from the solution file, and any lines in `Global` sections that reference the project GUID (such as `ProjectConfigurationPlatforms` or nested project mappings) are also removed.
+- For `.slnx` files, the corresponding `<Project Path="..." />` entry is removed, and empty `<Folder>` elements left behind are cleaned up.
 
 If `--add-projects-to-solution` is **not** specified, only the `.csproj` files are updated and the solution file is left untouched.
 

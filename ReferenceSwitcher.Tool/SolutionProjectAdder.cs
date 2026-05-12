@@ -15,6 +15,9 @@ internal static class SolutionProjectAdder
         if (!File.Exists(solutionPath))
             return Result.Failure($"Solution '{solutionPath}' was not found.");
 
+        if (SlnxSolutionFile.CanHandle(solutionPath))
+            return SlnxSolutionFile.AddProjects(solutionPath, existingSolutionProjects, discoveredProjects);
+
         var solutionDirectory = Path.GetDirectoryName(solutionPath) ?? Directory.GetCurrentDirectory();
         var existingSet = new HashSet<string>(existingSolutionProjects.Select(Path.GetFullPath), StringComparer.OrdinalIgnoreCase);
         var candidates = discoveredProjects
