@@ -6,10 +6,9 @@ internal static class ArgumentParser
 {
     public static RootCommand BuildRootCommand()
     {
-        var solutionOption = new Option<FileInfo>("--solution", ["-s"])
+        var solutionOption = new Option<FileInfo?>("--solution", ["-s"])
         {
-            Description = "Path to the base .sln or .slnx file.",
-            Required = true
+            Description = "Path to the base .sln or .slnx file. Optional when the current directory contains exactly one .sln or .slnx file."
         };
 
         var scanDirectoryOption = new Option<DirectoryInfo>("--scan-directory", ["-d"])
@@ -42,14 +41,21 @@ internal static class ArgumentParser
 
             command.SetAction(parseResult =>
             {
-                var solutionFile = parseResult.GetValue(solutionOption);
+                var providedSolution = parseResult.GetValue(solutionOption);
                 var scanDirectory = parseResult.GetValue(scanDirectoryOption);
                 var updateSolution = parseResult.GetValue(updateSolutionOption);
 
-                ArgumentNullException.ThrowIfNull(solutionFile);
                 ArgumentNullException.ThrowIfNull(scanDirectory);
 
-                RunSwitch(mode, solutionFile, scanDirectory, updateSolution);
+                var solutionResult = SolutionLocator.Resolve(providedSolution?.FullName, Directory.GetCurrentDirectory());
+                if (solutionResult.IsFailure)
+                {
+                    Console.Error.WriteLine(solutionResult.Error);
+                    Environment.ExitCode = 1;
+                    return;
+                }
+
+                RunSwitch(mode, new FileInfo(solutionResult.Value), scanDirectory, updateSolution);
             });
 
             return command;

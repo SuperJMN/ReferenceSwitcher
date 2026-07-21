@@ -22,13 +22,13 @@ Both commands share the same basic arguments:
 
 ```bash
 reference-switcher <command> \
-  --solution <path-to-sln-or-slnx> \
   --scan-directory <directory-to-scan> \
+  [--solution <path-to-sln-or-slnx>] \
   [--add-projects-to-solution]
 ```
 
-- `--solution` (`-s`): path to the `.sln` or `.slnx` file that defines the starting projects.
 - `--scan-directory` (`-d`): directory that will be scanned recursively for `.csproj` files used to build the project index.
+- `--solution` (`-s`): path to the `.sln` or `.slnx` file that defines the starting projects. Optional when the current directory contains exactly one `.sln` or `.slnx` file.
 - `--add-projects-to-solution`: when specified, the tool also updates the solution file to reflect the changes.
 
 ### Behavior of `--add-projects-to-solution`
