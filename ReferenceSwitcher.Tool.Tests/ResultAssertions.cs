@@ -15,4 +15,10 @@ internal static class ResultAssertions
         if (result.IsFailure)
             Assert.Fail(result.Error);
     }
+
+    public static void Failed<T>(Result<T> result)
+    {
+        if (result.IsSuccess)
+            Assert.Fail("Expected failure, but result succeeded.");
+    }
 }
